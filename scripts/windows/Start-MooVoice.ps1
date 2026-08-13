@@ -54,9 +54,11 @@ function Resolve-EngineDirectory([string]$RequestedDirectory) {
 
     foreach ($candidate in $candidates) {
         if (-not (Test-Path $candidate -PathType Container)) { continue }
-        foreach ($launcher in @("start_https.bat", "start_http.bat", "start.bat", "MMVCServerSIO.exe")) {
-            if (Test-Path (Join-Path $candidate $launcher) -PathType Leaf) {
-                return (Resolve-Path $candidate).Path
+        foreach ($launcher in @("start_http.bat", "start_https.bat", "start.bat", "MMVCServerSIO.exe")) {
+            $match = Get-ChildItem -LiteralPath $candidate -Filter $launcher -File -Recurse -ErrorAction SilentlyContinue |
+                Select-Object -First 1
+            if ($match) {
+                return $match.DirectoryName
             }
         }
     }
