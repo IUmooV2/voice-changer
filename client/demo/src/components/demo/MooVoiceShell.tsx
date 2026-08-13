@@ -96,7 +96,13 @@ export const MooVoiceShell = () => {
 
     useEffect(() => {
         appState.setAudioOutputElementId("moovoice-audio-output");
-        appState.setAudioMonitorElementId("moovoice-audio-monitor");
+        const monitor = document.getElementById("moovoice-audio-monitor") as HTMLAudioElement | null;
+        if (monitor) {
+            monitor.pause();
+            monitor.muted = true;
+            monitor.volume = 0;
+            monitor.srcObject = null;
+        }
     }, [appState.initialized]);
 
     const updateInput = async (value: string) => {
@@ -319,7 +325,7 @@ export const MooVoiceShell = () => {
                 <section className="moo-legacy-gate"><div><strong>Engine compatibility controls</strong><span>Use the original interface while MooVoice controls are being connected.</span></div><button onClick={() => setLegacyVisible((value) => !value)}>{legacyVisible ? "Hide legacy interface" : "Open legacy interface"}</button></section>
                 {legacyVisible && <div className="moo-legacy"><ModelSlotControl /></div>}
                 <audio hidden id="moovoice-audio-output" autoPlay playsInline />
-                <audio hidden id="moovoice-audio-monitor" autoPlay playsInline />
+                <audio hidden id="moovoice-audio-monitor" muted />
             </main>
         </div>
     );
