@@ -4,7 +4,8 @@ const CopyPlugin = require("copy-webpack-plugin");
 const webpack = require("webpack");
 module.exports = {
     mode: "production",
-    entry: "./src/000_index.tsx",
+    context: __dirname,
+    entry: path.resolve(__dirname, "src/000_index.tsx"),
     resolve: {
         extensions: [".ts", ".tsx", ".js"],
         fallback: {
