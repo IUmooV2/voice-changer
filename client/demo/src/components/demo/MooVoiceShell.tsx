@@ -7,7 +7,7 @@ import { useGuiState } from "./001_GuiStateProvider";
 type Mode = "simple" | "advanced";
 type Preset = "low-latency" | "balanced" | "studio";
 type AudioState = "idle" | "requesting" | "ready" | "error";
-type AuditionClip = { id: number; label: string; detail: string; url: string };
+type AuditionClip = { id: number; sampleNumber: number; label: string; detail: string; filename: string; createdAt: string; url: string };
 
 const MODE_KEY = "moovoice.ui.mode";
 const INPUT_KEY = "moovoice.audio.input";
@@ -371,7 +371,23 @@ export const MooVoiceShell = () => {
                 return;
             }
             const url = URL.createObjectURL(createWavBlob(samples));
-            setAuditionClips((current) => [...current, { id: Date.now(), label: auditionLabel.label, detail: auditionLabel.detail, url }]);
+            setAuditionClips((current) => {
+                const sampleNumber = current.reduce((highest, clip) => Math.max(highest, clip.sampleNumber), 0) + 1;
+                const safeIdentity = `${auditionLabel.label}-${auditionLabel.detail}`
+                    .toLocaleLowerCase()
+                    .replace(/[^a-z0-9]+/g, "-")
+                    .replace(/^-|-$/g, "")
+                    .slice(0, 48) || "voice";
+                return [...current, {
+                    id: Date.now(),
+                    sampleNumber,
+                    label: auditionLabel.label,
+                    detail: auditionLabel.detail,
+                    filename: `moovoice-sample-${String(sampleNumber).padStart(2, "0")}-${safeIdentity}.wav`,
+                    createdAt: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
+                    url,
+                }];
+            });
         } catch {
             setAuditionRecording(false);
             setAuditionError("MooVoice could not finish the converted-output recording.");
@@ -674,7 +690,12 @@ export const MooVoiceShell = () => {
                             <button className={auditionRecording ? "recording" : ""} onClick={auditionRecording ? stopAuditionRecording : startAuditionRecording}>{auditionRecording ? "■ Stop sample" : "● Record sample"}</button>
                         </div>
                         {auditionError && <div className="moo-import-error">{auditionError}</div>}
-                        {auditionClips.length > 0 && <div className="moo-audition-clips">{auditionClips.map((clip) => <article key={clip.id}><div><strong>{clip.label}</strong><span>{clip.detail}</span></div><audio controls src={clip.url} /><button onClick={() => removeAuditionClip(clip.id)} aria-label={`Remove ${clip.label} sample`}>×</button></article>)}</div>}
+                        {auditionClips.length > 0 && <div className="moo-audition-clips">{auditionClips.map((clip) => <article key={clip.id}>
+                            <div className="moo-audition-identity"><small>SAMPLE {String(clip.sampleNumber).padStart(2, "0")} · {clip.createdAt}</small><strong>{clip.label}</strong><span>{clip.detail}</span></div>
+                            <audio controls src={clip.url} />
+                            <a href={clip.url} download={clip.filename} title={clip.filename}>↓ WAV</a>
+                            <button onClick={() => removeAuditionClip(clip.id)} aria-label={`Remove sample ${clip.sampleNumber}, ${clip.label}`}>×</button>
+                        </article>)}</div>}
                     </section>
                 )}
 
