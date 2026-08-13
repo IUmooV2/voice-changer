@@ -7,6 +7,7 @@ import { useGuiState } from "./001_GuiStateProvider";
 type Mode = "simple" | "advanced";
 type Preset = "low-latency" | "balanced" | "studio";
 type VoiceProfile = "natural" | "full" | "bright" | "deep";
+type RvcPreference = { tran: number; indexRatio: number; protect: number; profile?: VoiceProfile | "custom" };
 type AudioState = "idle" | "requesting" | "ready" | "error";
 type AuditionClip = { id: number; sampleNumber: number; label: string; detail: string; filename: string; createdAt: string; url: string };
 
@@ -84,8 +85,8 @@ export const MooVoiceShell = () => {
     const [mode, setMode] = useState<Mode>(() => window.localStorage.getItem(MODE_KEY) === "advanced" ? "advanced" : "simple");
     const [preset, setPreset] = useState<Preset>("balanced");
     const [presetBusy, setPresetBusy] = useState(false);
-    const [rvcPreferences, setRvcPreferences] = useState<Record<string, { tran: number; indexRatio: number; protect: number }>>(
-        () => readJsonSetting<Record<string, { tran: number; indexRatio: number; protect: number }>>(RVC_PREFERENCES_KEY, {})
+    const [rvcPreferences, setRvcPreferences] = useState<Record<string, RvcPreference>>(
+        () => readJsonSetting<Record<string, RvcPreference>>(RVC_PREFERENCES_KEY, {})
     );
     const [legacyVisible, setLegacyVisible] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
@@ -423,7 +424,10 @@ export const MooVoiceShell = () => {
         setAuditionClips([]);
     };
 
-    const updateTransformation = async (changes: { tran?: number; indexRatio?: number; protect?: number }) => {
+    const updateTransformation = async (
+        changes: { tran?: number; indexRatio?: number; protect?: number },
+        profile: VoiceProfile | "custom" = "custom"
+    ) => {
         const nextSettings = {
             tran: changes.tran ?? Number(server.tran || 0),
             indexRatio: changes.indexRatio ?? Number(server.indexRatio || 0),
@@ -432,21 +436,27 @@ export const MooVoiceShell = () => {
         await appState.serverSetting.updateServerSettings({ ...server, ...nextSettings });
         if (selectedModel?.voiceChangerType === "RVC") {
             const key = rvcPreferenceKey(selectedModel);
-            setRvcPreferences((current) => ({ ...current, [key]: nextSettings }));
+            setRvcPreferences((current) => ({ ...current, [key]: { ...nextSettings, profile } }));
         }
     };
 
     const applyVoiceProfile = async (profile: VoiceProfile) => {
         const { tran, indexRatio, protect } = VOICE_PROFILES[profile];
-        await updateTransformation({ tran, indexRatio, protect });
+        await updateTransformation({ tran, indexRatio, protect }, profile);
     };
 
-    const activeVoiceProfile = (Object.keys(VOICE_PROFILES) as VoiceProfile[]).find((profile) => {
+    const numericVoiceProfile = (Object.keys(VOICE_PROFILES) as VoiceProfile[]).find((profile) => {
         const settings = VOICE_PROFILES[profile];
         return Number(server.tran || 0) === settings.tran
             && Math.abs(Number(server.indexRatio || 0) - settings.indexRatio) < 0.001
             && Math.abs(Number(server.protect ?? 0.33) - settings.protect) < 0.001;
     });
+    const selectedRvcPreference = selectedModel?.voiceChangerType === "RVC"
+        ? rvcPreferences[rvcPreferenceKey(selectedModel)]
+        : undefined;
+    const activeVoiceProfile = selectedRvcPreference?.profile === "custom"
+        ? undefined
+        : selectedRvcPreference?.profile || numericVoiceProfile;
     const activeProfileSettings = activeVoiceProfile ? VOICE_PROFILES[activeVoiceProfile] : null;
 
     const selectModel = async (slotIndex: typeof server.modelSlotIndex) => {
@@ -455,10 +465,18 @@ export const MooVoiceShell = () => {
         const savedSettings = targetModel?.voiceChangerType === "RVC"
             ? rvcPreferences[rvcPreferenceKey(targetModel)]
             : undefined;
-        const naturalDefaults = targetModel?.voiceChangerType === "RVC"
-            ? { tran: VOICE_PROFILES.natural.tran, indexRatio: VOICE_PROFILES.natural.indexRatio, protect: VOICE_PROFILES.natural.protect }
-            : {};
-        const restoredSettings = savedSettings || naturalDefaults;
+        const naturalDefaults: RvcPreference = {
+            tran: VOICE_PROFILES.natural.tran,
+            indexRatio: VOICE_PROFILES.natural.indexRatio,
+            protect: VOICE_PROFILES.natural.protect,
+            profile: "natural",
+        };
+        const restoredPreference = savedSettings || naturalDefaults;
+        const { profile: restoredProfile, ...restoredSettings } = restoredPreference;
+        if (targetModel?.voiceChangerType === "RVC" && !savedSettings) {
+            const key = rvcPreferenceKey(targetModel);
+            setRvcPreferences((current) => ({ ...current, [key]: naturalDefaults }));
+        }
 
         // Model activation can reset conversion parameters, so restore tuning only after
         // the engine has completed the slot change.
