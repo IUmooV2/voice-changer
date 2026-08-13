@@ -9,6 +9,7 @@ type Preset = "low-latency" | "balanced" | "studio";
 type VoiceProfile = "natural" | "full" | "bright" | "deep";
 type RvcPreference = { tran: number; indexRatio: number; protect: number; profile?: VoiceProfile | "custom" };
 type PendingProfileRestore = { slotIndex: string | number; settings: RvcPreference; label: string };
+type RvcMetadata = { displayName?: string; tags?: string; notes?: string; favorite?: boolean };
 type AudioState = "idle" | "requesting" | "ready" | "error";
 type AuditionClip = { id: number; sampleNumber: number; label: string; detail: string; filename: string; createdAt: string; url: string };
 
@@ -16,6 +17,7 @@ const MODE_KEY = "moovoice.ui.mode";
 const INPUT_KEY = "moovoice.audio.input";
 const OUTPUT_KEY = "moovoice.audio.output";
 const RVC_PREFERENCES_KEY = "moovoice.rvc.preferences";
+const RVC_METADATA_KEY = "moovoice.rvc.metadata";
 const MAX_MODEL_BYTES = 2 * 1024 * 1024 * 1024;
 const MAX_INDEX_BYTES = 1024 * 1024 * 1024;
 const JVS_FAVORITES_KEY = "moovoice.jvs.favorites";
@@ -91,6 +93,9 @@ export const MooVoiceShell = () => {
     const [rvcPreferences, setRvcPreferences] = useState<Record<string, RvcPreference>>(
         () => readJsonSetting<Record<string, RvcPreference>>(RVC_PREFERENCES_KEY, {})
     );
+    const [rvcMetadata, setRvcMetadata] = useState<Record<string, RvcMetadata>>(
+        () => readJsonSetting<Record<string, RvcMetadata>>(RVC_METADATA_KEY, {})
+    );
     const [legacyVisible, setLegacyVisible] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
     const [importName, setImportName] = useState("");
@@ -111,6 +116,7 @@ export const MooVoiceShell = () => {
     });
     const [jvsAliases, setJvsAliases] = useState<Record<string, string>>(() => readJsonSetting<Record<string, string>>(JVS_ALIASES_KEY, {}));
     const [modelQuery, setModelQuery] = useState("");
+    const [modelFavoritesOnly, setModelFavoritesOnly] = useState(false);
     const [jvsFavoritesOnly, setJvsFavoritesOnly] = useState(false);
     const [auditionRecording, setAuditionRecording] = useState(false);
     const [auditionError, setAuditionError] = useState("");
@@ -183,6 +189,10 @@ export const MooVoiceShell = () => {
     useEffect(() => {
         window.localStorage.setItem(RVC_PREFERENCES_KEY, JSON.stringify(rvcPreferences));
     }, [rvcPreferences]);
+
+    useEffect(() => {
+        window.localStorage.setItem(RVC_METADATA_KEY, JSON.stringify(rvcMetadata));
+    }, [rvcMetadata]);
 
     useEffect(() => {
         if (!pendingProfileRestore || String(server.modelSlotIndex) !== String(pendingProfileRestore.slotIndex)) return;
@@ -539,11 +549,31 @@ export const MooVoiceShell = () => {
     };
 
     const availableModels = modelSlots.filter((slot) => Boolean(slot.modelFile));
-    const visibleModels = availableModels.filter((slot) => {
-        const query = modelQuery.trim().toLocaleLowerCase();
-        if (!query) return true;
-        return `${slot.name || ""} ${slot.voiceChangerType || ""}`.toLocaleLowerCase().includes(query);
-    });
+    const selectedModelMetadata = selectedModel?.voiceChangerType === "RVC"
+        ? rvcMetadata[rvcPreferenceKey(selectedModel)] || {}
+        : {};
+    const favoriteModelCount = availableModels.filter((slot) => slot.voiceChangerType === "RVC" && rvcMetadata[rvcPreferenceKey(slot)]?.favorite).length;
+    const visibleModels = availableModels
+        .filter((slot) => !modelFavoritesOnly || (slot.voiceChangerType === "RVC" && rvcMetadata[rvcPreferenceKey(slot)]?.favorite))
+        .filter((slot) => {
+            const query = modelQuery.trim().toLocaleLowerCase();
+            if (!query) return true;
+            const metadata = slot.voiceChangerType === "RVC" ? rvcMetadata[rvcPreferenceKey(slot)] || {} : {};
+            return `${slot.name || ""} ${slot.voiceChangerType || ""} ${metadata.displayName || ""} ${metadata.tags || ""} ${metadata.notes || ""}`
+                .toLocaleLowerCase()
+                .includes(query);
+        })
+        .sort((first, second) => {
+            const firstFavorite = first.voiceChangerType === "RVC" && rvcMetadata[rvcPreferenceKey(first)]?.favorite ? 1 : 0;
+            const secondFavorite = second.voiceChangerType === "RVC" && rvcMetadata[rvcPreferenceKey(second)]?.favorite ? 1 : 0;
+            return secondFavorite - firstFavorite;
+        });
+
+    const updateRvcMetadata = (slot: typeof selectedModel, changes: RvcMetadata) => {
+        if (!slot || slot.voiceChangerType !== "RVC") return;
+        const key = rvcPreferenceKey(slot);
+        setRvcMetadata((current) => ({ ...current, [key]: { ...(current[key] || {}), ...changes } }));
+    };
 
     const openImporter = (replaceSlot?: number) => {
         const replacing = typeof replaceSlot === "number";
@@ -681,23 +711,30 @@ export const MooVoiceShell = () => {
                 <section className="moo-grid">
                     <article className="moo-panel" id="moo-models">
                         <div className="moo-panel-heading"><div><span className="moo-icon">◉</span><div><h3>Voice model</h3><p>Choose how you want to sound</p></div></div><div className="moo-panel-actions">{mode === "advanced" && selectedModel?.voiceChangerType === "RVC" && typeof selectedModel.slotIndex === "number" && <button onClick={() => openImporter(selectedModel.slotIndex)}>Replace selected</button>}<button onClick={() => openImporter()}>Import model</button></div></div>
-                        {availableModels.length > 4 && <div className="moo-library-search"><span>⌕</span><input value={modelQuery} onChange={(event) => setModelQuery(event.target.value)} placeholder="Search voice models…" />{modelQuery && <button onClick={() => setModelQuery("")} aria-label="Clear model search">×</button>}</div>}
+                        {availableModels.length > 0 && <><div className="moo-library-search"><span>⌕</span><input value={modelQuery} onChange={(event) => setModelQuery(event.target.value)} placeholder="Search names, tags, or notes…" />{modelQuery && <button onClick={() => setModelQuery("")} aria-label="Clear model search">×</button>}</div><div className="moo-library-filters"><button className={!modelFavoritesOnly ? "active" : ""} onClick={() => setModelFavoritesOnly(false)}>All voices</button><button className={modelFavoritesOnly ? "active" : ""} onClick={() => setModelFavoritesOnly(true)} disabled={favoriteModelCount === 0}>★ Favorites {favoriteModelCount ? `(${favoriteModelCount})` : ""}</button></div></>}
                         {availableModels.length > 0 ? (
                             visibleModels.length > 0 ? <div className="moo-model-list">
-                                {visibleModels.slice(0, 12).map((slot) => (
-                                    <button
-                                        key={String(slot.slotIndex)}
-                                        className={String(slot.slotIndex) === String(server.modelSlotIndex) ? "moo-model-option active" : "moo-model-option"}
-                                        onClick={() => selectModel(slot.slotIndex)}
-                                    >
-                                        <span>{String(slot.name || "Voice").slice(0, 1).toUpperCase()}</span>
-                                        <div><strong>{slot.name || `Voice ${slot.slotIndex}`}</strong><small>{slot.voiceChangerType}</small></div>
-                                    </button>
-                                ))}
-                            </div> : <div className="moo-library-empty">No voice models match “{modelQuery}”.</div>
+                                {visibleModels.slice(0, 12).map((slot) => {
+                                    const metadata = slot.voiceChangerType === "RVC" ? rvcMetadata[rvcPreferenceKey(slot)] || {} : {};
+                                    const displayName = metadata.displayName?.trim() || slot.name || `Voice ${slot.slotIndex}`;
+                                    return <div key={String(slot.slotIndex)} className={String(slot.slotIndex) === String(server.modelSlotIndex) ? "moo-model-option active" : "moo-model-option"}>
+                                        <button className="moo-model-select" disabled={Boolean(profileApplying)} onClick={() => selectModel(slot.slotIndex)}>
+                                            <span>{displayName.slice(0, 1).toUpperCase()}</span>
+                                            <div><strong>{displayName}</strong><small>{metadata.tags?.trim() || slot.voiceChangerType}{metadata.displayName?.trim() ? ` · ${slot.name}` : ""}</small></div>
+                                        </button>
+                                        {slot.voiceChangerType === "RVC" && <button className={metadata.favorite ? "moo-model-favorite active" : "moo-model-favorite"} onClick={() => updateRvcMetadata(slot, { favorite: !metadata.favorite })} aria-label={metadata.favorite ? `Remove ${displayName} from favorites` : `Add ${displayName} to favorites`}>{metadata.favorite ? "★" : "☆"}</button>}
+                                    </div>;
+                                })}
+                            </div> : <div className="moo-library-empty">{modelFavoritesOnly ? "No favorite voices match this search." : `No voice models match “${modelQuery}”.`}</div>
                         ) : (
                             <div className="moo-empty" onClick={() => openImporter()}><div className="moo-empty-icon">＋</div><div><strong>No model selected</strong><span>Import an RVC .pth or .onnx model</span></div></div>
                         )}
+                        {mode === "advanced" && selectedModel?.voiceChangerType === "RVC" && <div className="moo-model-organizer">
+                            <div><span>MODEL DETAILS</span><strong>{selectedModelMetadata.displayName?.trim() || selectedModel.name}</strong></div>
+                            <label><span>MY NAME FOR THIS VOICE</span><input value={selectedModelMetadata.displayName || ""} onChange={(event) => updateRvcMetadata(selectedModel, { displayName: event.target.value })} placeholder={String(selectedModel.name || "Voice name")} /></label>
+                            <label><span>TAGS</span><input value={selectedModelMetadata.tags || ""} onChange={(event) => updateRvcMetadata(selectedModel, { tags: event.target.value })} placeholder="Soft, feminine, English, narrator…" /></label>
+                            <label className="wide"><span>NOTES</span><textarea value={selectedModelMetadata.notes || ""} onChange={(event) => updateRvcMetadata(selectedModel, { notes: event.target.value })} placeholder="What this model sounds like and where it works best…" rows={2} /></label>
+                        </div>}
                     </article>
 
                     <article className="moo-panel" id="moo-audio">
