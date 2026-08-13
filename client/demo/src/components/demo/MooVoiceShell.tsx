@@ -771,7 +771,7 @@ export const MooVoiceShell = () => {
                             <label className="wide"><span>MY NAME FOR THIS VOICE</span><input value={selectedModelMetadata.displayName || ""} onChange={(event) => updateRvcMetadata(selectedModel, { displayName: event.target.value })} placeholder={String(selectedModel.name || "Voice name")} /></label>
                             <label className="wide"><span>TAGS</span><input value={selectedModelMetadata.tags || ""} onChange={(event) => updateRvcMetadata(selectedModel, { tags: event.target.value })} placeholder="Soft, feminine, English, narrator…" /></label>
                             <label className="wide"><span>NOTES</span><textarea value={selectedModelMetadata.notes || ""} onChange={(event) => updateRvcMetadata(selectedModel, { notes: event.target.value })} placeholder="What this model sounds like and where it works best…" rows={2} /></label>
-                        </div>
+                        </div>}
                     </article>
 
                     <article className="moo-panel" id="moo-audio">
