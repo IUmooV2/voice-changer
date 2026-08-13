@@ -515,9 +515,6 @@ export const MooVoiceShell = () => {
         indexRatio: Number(server.indexRatio || 0),
         protect: Number(server.protect ?? 0.33),
     };
-    const activeSetupOptimized = activeVoiceProfile === recommendedVoiceProfile
-        && preset === "balanced"
-        && selectedModelUsesGpu;
 
     const selectModel = async (slotIndex: typeof server.modelSlotIndex) => {
         const targetModel = modelSlots.find((slot) => String(slot.slotIndex) === String(slotIndex))
@@ -571,6 +568,9 @@ export const MooVoiceShell = () => {
         : 0;
     const modelReadinessLabel = modelReadinessScore >= 85 ? "Excellent" : modelReadinessScore >= 70 ? "Ready" : modelReadinessScore >= 50 ? "Usable" : "Needs attention";
     const recommendedVoiceProfile: VoiceProfile = selectedModelHasIndex ? "full" : "natural";
+    const activeSetupOptimized = activeVoiceProfile === recommendedVoiceProfile
+        && preset === "balanced"
+        && selectedModelUsesGpu;
     const modelReadinessNotes = selectedModel?.voiceChangerType === "RVC" ? [
         selectedModelHasIndex ? "Matching feature index is available for stronger identity." : "No feature index is loaded, so similarity and fine detail may be limited.",
         selectedModelIsLegacy ? "This model uses a legacy engine format." : "The model is compatible with the current engine.",
@@ -628,11 +628,22 @@ export const MooVoiceShell = () => {
 
     const optimizeSelectedModel = async () => {
         if (!selectedModel || selectedModel.voiceChangerType !== "RVC") return;
+        if (activeSetupOptimized) {
+            setAudioState("ready");
+            setAudioMessage(`${VOICE_PROFILES[recommendedVoiceProfile].label} voice settings, Balanced performance, and GPU acceleration are already active.`);
+            return;
+        }
         setProfileApplying("Optimizing voice…");
+        setAudioState("requesting");
+        setAudioMessage("Applying recommended voice and performance settings…");
         try {
             await applyVoiceProfile(recommendedVoiceProfile);
             await applyPreset("balanced");
-            setAudioMessage(`Recommended ${VOICE_PROFILES[recommendedVoiceProfile].label} voice settings and Balanced performance are active.`);
+            setAudioState("ready");
+            setAudioMessage(`Optimized: ${VOICE_PROFILES[recommendedVoiceProfile].label} voice settings, Balanced performance, and GPU acceleration are active.`);
+        } catch (error) {
+            setAudioState("error");
+            setAudioMessage(error instanceof Error ? error.message : "MooVoice could not apply the recommended setup.");
         } finally {
             setProfileApplying("");
         }
