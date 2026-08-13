@@ -16,5 +16,9 @@ module.exports = merge(common, {
         },
         host: "0.0.0.0",
         server: "https",
+        watchFiles: {
+            paths: ["src/**/*", "public/**/*"],
+            options: { usePolling: false },
+        },
     },
 });
