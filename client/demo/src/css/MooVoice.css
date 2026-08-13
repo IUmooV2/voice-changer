@@ -1490,3 +1490,13 @@ body { margin: 0; background: var(--moo-bg); color: var(--moo-text); font-family
         justify-self: start;
     }
 }
+
+
+.moo-setup-status.personal {
+    border-color: rgba(190, 152, 255, 0.3);
+    background: rgba(156, 103, 255, 0.09);
+}
+
+.moo-setup-status.personal strong {
+    color: var(--moo-lilac);
+}
