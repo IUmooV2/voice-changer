@@ -170,7 +170,8 @@ body { margin: 0; background: var(--moo-bg); color: var(--moo-text); font-family
     opacity: 0.7;
 }
 
-.moo-model-select > span {
+.moo-model-select > span,
+.moo-model-select > img {
     flex: 0 0 38px;
     width: 38px;
     height: 38px;
@@ -180,6 +181,10 @@ body { margin: 0; background: var(--moo-bg); color: var(--moo-text); font-family
     color: var(--moo-lilac);
     background: rgba(166, 105, 255, 0.13);
     font-weight: 750;
+}
+
+.moo-model-select > img {
+    object-fit: cover;
 }
 
 .moo-model-select div {
@@ -894,7 +899,6 @@ body { margin: 0; background: var(--moo-bg); color: var(--moo-text); font-family
 
 .moo-model-organizer {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
     margin-top: 18px;
     padding: 16px;
@@ -903,23 +907,97 @@ body { margin: 0; background: var(--moo-bg); color: var(--moo-text); font-family
     background: rgba(166, 105, 255, 0.045);
 }
 
-.moo-model-organizer > div,
-.moo-model-organizer .wide {
-    grid-column: 1 / -1;
-}
-
-.moo-model-organizer > div {
+.moo-model-organizer-title {
     display: flex;
     align-items: baseline;
     gap: 10px;
 }
 
-.moo-model-organizer > div span,
+.moo-model-organizer-title span,
 .moo-model-organizer label > span {
     color: var(--moo-muted);
     font-size: 8px;
     font-weight: 800;
     letter-spacing: 0.11em;
+}
+
+.moo-model-artwork {
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 11px;
+    border: 1px solid var(--moo-border);
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.moo-model-artwork > img,
+.moo-model-artwork > span {
+    width: 58px;
+    height: 58px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    color: var(--moo-lilac);
+    background: rgba(166, 105, 255, 0.14);
+    object-fit: cover;
+    font-size: 22px;
+    font-weight: 800;
+}
+
+.moo-model-artwork label {
+    cursor: pointer;
+}
+
+.moo-model-artwork label input {
+    display: none;
+}
+
+.moo-model-artwork label strong,
+.moo-model-artwork label small {
+    display: block;
+}
+
+.moo-model-artwork label small {
+    margin-top: 3px;
+    color: var(--moo-muted);
+}
+
+.moo-model-artwork > button {
+    border: 0;
+    color: var(--moo-muted);
+    background: transparent;
+    font-size: 9px;
+    cursor: pointer;
+}
+
+.moo-model-quality {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.moo-model-quality > span {
+    display: grid;
+    gap: 3px;
+    padding: 10px;
+    border: 1px solid var(--moo-border);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.016);
+}
+
+.moo-model-quality > span.good strong {
+    color: var(--moo-green);
+}
+
+.moo-model-quality > span.warning strong {
+    color: #e3b77e;
+}
+
+.moo-model-quality small {
+    color: var(--moo-muted);
+    font-size: 8px;
 }
 
 .moo-model-organizer label {
@@ -943,6 +1021,21 @@ body { margin: 0; background: var(--moo-bg); color: var(--moo-text); font-family
 .moo-model-organizer textarea:focus {
     border-color: var(--moo-lilac);
     outline: none;
+}
+
+@media (max-width: 560px) {
+    .moo-model-artwork {
+        grid-template-columns: 52px minmax(0, 1fr);
+    }
+
+    .moo-model-artwork > button {
+        grid-column: 2;
+        justify-self: start;
+    }
+
+    .moo-model-quality {
+        grid-template-columns: 1fr;
+    }
 }
 
 .moo-library-empty {
