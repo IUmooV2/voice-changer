@@ -4,6 +4,11 @@ const common = require("./webpack.common.js");
 
 const engineTarget = process.env.MOOVOICE_ENGINE_URL || "http://127.0.0.1:18888";
 
+// Watchpack reports Windows paths with backslashes. Regexes keep protected
+// system files out of its initial scan without disabling project hot reload.
+const windowsSystemFiles =
+    /^[A-Za-z]:[\\/](?:DumpStack\.log\.tmp|hiberfil\.sys|pagefile\.sys|swapfile\.sys)$/i;
+
 module.exports = merge(common, {
     mode: "development",
     watchOptions: {
@@ -11,14 +16,11 @@ module.exports = merge(common, {
         poll: 1000,
         followSymlinks: false,
         ignored: [
-            "**/node_modules/**",
-            "**/dist/**",
-            "**/logs/**",
-            "**/.git/**",
-            "C:/DumpStack.log.tmp",
-            "C:/hiberfil.sys",
-            "C:/pagefile.sys",
-            "C:/swapfile.sys",
+            /[\\/]node_modules[\\/]/,
+            /[\\/]dist[\\/]/,
+            /[\\/]logs[\\/]/,
+            /[\\/]\.git[\\/]/,
+            windowsSystemFiles,
         ],
     },
     devServer: {
@@ -56,5 +58,5 @@ module.exports = merge(common, {
                 ws: true,
             },
         ],
-},
+    },
 });
