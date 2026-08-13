@@ -6,15 +6,21 @@ param(
     [int]$InterfacePort = 8080,
     [switch]$SkipEngine,
     [switch]$SkipInterface,
-    [switch]$NoBrowser
+    [switch]$NoBrowser,
+    [switch]$ShowServiceWindows
 )
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $DemoDirectory = Join-Path $RepoRoot "client\demo"
+$LogDirectory = Join-Path $RepoRoot "logs\moovoice"
+$StartupLog = Join-Path $LogDirectory "startup.log"
+New-Item -ItemType Directory -Force -Path $LogDirectory | Out-Null
 
-function Write-Step([string]$Message) {
-    Write-Host "[MooVoice] $Message" -ForegroundColor Magenta
+function Write-Step([string]$Message, [ConsoleColor]$Color = [ConsoleColor]::Magenta) {
+    $line = "[MooVoice] $Message"
+    Write-Host $line -ForegroundColor $Color
+    Add-Content -LiteralPath $StartupLog -Value "$((Get-Date).ToString("s")) $line" -Encoding UTF8
 }
 
 function Test-TcpPort([int]$Port) {
@@ -31,12 +37,21 @@ function Test-TcpPort([int]$Port) {
     }
 }
 
-function Wait-ForPort([string]$Name, [int]$Port, [int]$TimeoutSeconds) {
+function Wait-ForPort([string]$Name, [int]$Port, [int]$TimeoutSeconds, [System.Diagnostics.Process]$Process = $null) {
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    $nextUpdate = 10
     while ((Get-Date) -lt $deadline) {
+        if ($Process -and $Process.HasExited) {
+            throw "$Name exited before becoming ready (exit code $($Process.ExitCode))."
+        }
         if (Test-TcpPort $Port) {
-            Write-Host "[MooVoice] $Name is ready on port $Port." -ForegroundColor Green
+            Write-Step "$Name is ready on port $Port." Green
             return
+        }
+        $elapsed = $TimeoutSeconds - [Math]::Ceiling(($deadline - (Get-Date)).TotalSeconds)
+        if ($elapsed -ge $nextUpdate) {
+            Write-Step "Still waiting for $Name..." DarkGray
+            $nextUpdate += 10
         }
         Start-Sleep -Milliseconds 750
     }
@@ -78,9 +93,11 @@ function Start-Engine([string]$Directory) {
         if (-not (Test-Path $path -PathType Leaf)) { continue }
         Write-Step "Starting conversion engine with $($choice.Name)..."
         if ($path.EndsWith(".bat")) {
-            Start-Process -FilePath "cmd.exe" -ArgumentList "/k", ('"' + $path + '"') -WorkingDirectory $Directory -WindowStyle Minimized | Out-Null
+            $windowStyle = if ($ShowServiceWindows) { "Normal" } else { "Minimized" }
+            return Start-Process -FilePath "cmd.exe" -ArgumentList "/k", ('title MooVoice Engine && "' + $path + '"') -WorkingDirectory $Directory -WindowStyle $windowStyle -PassThru
         } else {
-            Start-Process -FilePath $path -ArgumentList $choice.Args -WorkingDirectory $Directory | Out-Null
+            $windowStyle = if ($ShowServiceWindows) { "Normal" } else { "Minimized" }
+            return Start-Process -FilePath $path -ArgumentList $choice.Args -WorkingDirectory $Directory -WindowStyle $windowStyle -PassThru
         }
         return
     }
@@ -104,8 +121,8 @@ if (-not $SkipEngine) {
             Write-Host "Then run this script again."
             exit 2
         }
-        Start-Engine $resolvedEngineDirectory
-        Wait-ForPort "Conversion engine" $EnginePort 120
+        $engineProcess = Start-Engine $resolvedEngineDirectory
+        Wait-ForPort "Conversion engine" $EnginePort 120 $engineProcess
     }
 }
 
