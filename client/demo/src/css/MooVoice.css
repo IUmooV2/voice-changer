@@ -1500,3 +1500,27 @@ body { margin: 0; background: var(--moo-bg); color: var(--moo-text); font-family
 .moo-setup-status.personal strong {
     color: var(--moo-lilac);
 }
+
+
+.moo-readiness-action > div {
+    display: grid;
+    gap: 4px;
+}
+
+.moo-readiness-action > button {
+    align-self: center;
+    padding: 9px 11px;
+    border: 1px solid rgba(237, 184, 92, 0.34);
+    border-radius: 9px;
+    color: #e7bd72;
+    background: rgba(237, 184, 92, 0.08);
+    font-size: 9px;
+    font-weight: 800;
+    white-space: nowrap;
+    cursor: pointer;
+}
+
+.moo-readiness-action > button:hover {
+    border-color: rgba(237, 184, 92, 0.58);
+    background: rgba(237, 184, 92, 0.13);
+}
