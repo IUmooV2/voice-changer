@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ModelUploadSetting } from "@dannadori/voice-changer-client-js";
 import { ModelSlotControl } from "./b00_ModelSlotControl";
 import { useAppState } from "../../001_provider/001_AppStateProvider";
@@ -7,6 +7,7 @@ import { useGuiState } from "./001_GuiStateProvider";
 type Mode = "simple" | "advanced";
 type Preset = "low-latency" | "balanced" | "studio";
 type AudioState = "idle" | "requesting" | "ready" | "error";
+type AuditionClip = { id: number; label: string; detail: string; url: string };
 
 const MODE_KEY = "moovoice.ui.mode";
 const INPUT_KEY = "moovoice.audio.input";
@@ -71,6 +72,12 @@ export const MooVoiceShell = () => {
     const [jvsAliases, setJvsAliases] = useState<Record<string, string>>(() => readJsonSetting<Record<string, string>>(JVS_ALIASES_KEY, {}));
     const [modelQuery, setModelQuery] = useState("");
     const [jvsFavoritesOnly, setJvsFavoritesOnly] = useState(false);
+    const [auditionRecording, setAuditionRecording] = useState(false);
+    const [auditionError, setAuditionError] = useState("");
+    const [auditionClips, setAuditionClips] = useState<AuditionClip[]>([]);
+    const auditionRecorderRef = useRef<MediaRecorder | null>(null);
+    const auditionChunksRef = useRef<Blob[]>([]);
+    const auditionLabelRef = useRef({ label: "", detail: "" });
 
     const loadDevices = async () => {
         if (!navigator.mediaDevices?.enumerateDevices) return;
@@ -308,6 +315,71 @@ export const MooVoiceShell = () => {
             else delete next[key];
             return next;
         });
+    };
+
+    const getAuditionLabel = () => {
+        if (isBeatriceJvs) {
+            const speaker = jvsAliases[String(guiState.beatriceJVSSpeakerId)] || `JVS ${String(guiState.beatriceJVSSpeakerId).padStart(3, "0")}`;
+            return { label: speaker, detail: JVS_RANGE_LABELS[guiState.beatriceJVSSpeakerPitch] || "Natural" };
+        }
+        return { label: String(selectedModel?.name || "Voice sample"), detail: String(selectedModel?.voiceChangerType || "RVC") };
+    };
+
+    const startAuditionRecording = () => {
+        setAuditionError("");
+        if (!guiState.isConverting) {
+            setAuditionError("Start voice conversion before recording a comparison clip.");
+            return;
+        }
+        if (typeof MediaRecorder === "undefined") {
+            setAuditionError("This browser does not support converted-output recording.");
+            return;
+        }
+        const output = document.getElementById("moovoice-audio-output") as HTMLAudioElement | null;
+        const source = output?.srcObject;
+        if (!(source instanceof MediaStream) || source.getAudioTracks().length === 0) {
+            setAuditionError("The converted audio stream is not ready yet. Speak once, then try again.");
+            return;
+        }
+        const stream = new MediaStream(source.getAudioTracks());
+        const preferredType = ["audio/webm;codecs=opus", "audio/webm"].find((type) => MediaRecorder.isTypeSupported(type));
+        const recorder = preferredType ? new MediaRecorder(stream, { mimeType: preferredType }) : new MediaRecorder(stream);
+        auditionChunksRef.current = [];
+        auditionLabelRef.current = getAuditionLabel();
+        recorder.ondataavailable = (event) => { if (event.data.size > 0) auditionChunksRef.current.push(event.data); };
+        recorder.onerror = () => { setAuditionRecording(false); setAuditionError("The browser could not record the converted stream."); };
+        recorder.onstop = () => {
+            setAuditionRecording(false);
+            if (auditionChunksRef.current.length === 0) {
+                setAuditionError("No converted audio was captured. Keep conversion live and speak during recording.");
+                return;
+            }
+            const blob = new Blob(auditionChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+            const url = URL.createObjectURL(blob);
+            const metadata = auditionLabelRef.current;
+            setAuditionClips((current) => [...current, { id: Date.now(), label: metadata.label, detail: metadata.detail, url }]);
+        };
+        auditionRecorderRef.current = recorder;
+        recorder.start(250);
+        setAuditionRecording(true);
+    };
+
+    const stopAuditionRecording = () => {
+        const recorder = auditionRecorderRef.current;
+        if (recorder?.state === "recording") recorder.stop();
+    };
+
+    const removeAuditionClip = (id: number) => {
+        setAuditionClips((current) => {
+            const target = current.find((clip) => clip.id === id);
+            if (target) URL.revokeObjectURL(target.url);
+            return current.filter((clip) => clip.id !== id);
+        });
+    };
+
+    const clearAuditionClips = () => {
+        auditionClips.forEach((clip) => URL.revokeObjectURL(clip.url));
+        setAuditionClips([]);
     };
 
     const updateTransformation = async (changes: { tran?: number; indexRatio?: number; protect?: number }) => {
@@ -579,6 +651,21 @@ export const MooVoiceShell = () => {
                         </div>
                         {jvsFavorites.length > 0 && <div className="moo-jvs-saved"><strong>Saved voices</strong>{jvsFavorites.map((item) => { const [speakerValue, pitchValue] = item.split(":").map(Number); const active = speakerValue === guiState.beatriceJVSSpeakerId && pitchValue === guiState.beatriceJVSSpeakerPitch; return <button key={item} className={active ? "active" : ""} onClick={() => updateBeatriceVoice(speakerValue, pitchValue)}><span>{jvsAliases[String(speakerValue)] || `JVS ${String(speakerValue).padStart(3, "0")}`}</span><small>{JVS_RANGE_LABELS[pitchValue]}</small></button>; })}</div>}
                         <div className="moo-import-note"><strong>Japanese-trained</strong><span>English may inherit Japanese pronunciation and rhythm. These voices are best treated as experimental styles, not natural English models.</span></div>
+                    </section>
+                )}
+
+                {modelReady && (
+                    <section className="moo-audition" aria-label="Voice audition recorder">
+                        <div className="moo-section-title">
+                            <div><h3>Audition comparison</h3><p>Record the converted output and compare voices using the same test phrase.</p></div>
+                            {auditionClips.length > 0 && <button onClick={clearAuditionClips}>Clear clips</button>}
+                        </div>
+                        <div className="moo-audition-capture">
+                            <div><small>TEST PHRASE</small><strong>“Hey, how’s it going? I’m testing my new voice today.”</strong><span>{auditionRecording ? "Recording converted output now…" : "Start conversion, press record, then read the phrase."}</span></div>
+                            <button className={auditionRecording ? "recording" : ""} onClick={auditionRecording ? stopAuditionRecording : startAuditionRecording}>{auditionRecording ? "■ Stop sample" : "● Record sample"}</button>
+                        </div>
+                        {auditionError && <div className="moo-import-error">{auditionError}</div>}
+                        {auditionClips.length > 0 && <div className="moo-audition-clips">{auditionClips.map((clip) => <article key={clip.id}><div><strong>{clip.label}</strong><span>{clip.detail}</span></div><audio controls src={clip.url} /><button onClick={() => removeAuditionClip(clip.id)} aria-label={`Remove ${clip.label} sample`}>×</button></article>)}</div>}
                     </section>
                 )}
 
