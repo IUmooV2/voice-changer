@@ -6,6 +6,19 @@ const engineTarget = process.env.MOOVOICE_ENGINE_URL || "http://127.0.0.1:18888"
 
 module.exports = merge(common, {
     mode: "development",
+    watchOptions: {
+        aggregateTimeout: 250,
+        ignored: [
+            "**/node_modules/**",
+            "**/dist/**",
+            "**/logs/**",
+            "**/.git/**",
+            "C:/DumpStack.log.tmp",
+            "C:/hiberfil.sys",
+            "C:/pagefile.sys",
+            "C:/swapfile.sys",
+        ],
+    },
     devServer: {
         static: {
             directory: path.join(__dirname, "public"),
@@ -41,8 +54,23 @@ module.exports = merge(common, {
             },
         ],
         watchFiles: {
-            paths: ["src/**/*", "public/**/*"],
-            options: { usePolling: false },
+            paths: [
+                path.join(__dirname, "src/**/*"),
+                path.join(__dirname, "public/**/*"),
+            ],
+            options: {
+                usePolling: false,
+                awaitWriteFinish: {
+                    stabilityThreshold: 200,
+                    pollInterval: 50,
+                },
+                ignored: [
+                    "**/node_modules/**",
+                    "**/dist/**",
+                    "**/logs/**",
+                    "**/.git/**",
+                ],
+            },
         },
     },
 });
