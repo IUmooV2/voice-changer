@@ -454,9 +454,17 @@ export const MooVoiceShell = () => {
     const selectedRvcPreference = selectedModel?.voiceChangerType === "RVC"
         ? rvcPreferences[rvcPreferenceKey(selectedModel)]
         : undefined;
+    const savedNumericVoiceProfile = selectedRvcPreference
+        ? (Object.keys(VOICE_PROFILES) as VoiceProfile[]).find((profile) => {
+            const settings = VOICE_PROFILES[profile];
+            return selectedRvcPreference.tran === settings.tran
+                && Math.abs(selectedRvcPreference.indexRatio - settings.indexRatio) < 0.001
+                && Math.abs(selectedRvcPreference.protect - settings.protect) < 0.001;
+        })
+        : undefined;
     const activeVoiceProfile = selectedRvcPreference?.profile === "custom"
         ? undefined
-        : selectedRvcPreference?.profile || numericVoiceProfile;
+        : selectedRvcPreference?.profile || savedNumericVoiceProfile || numericVoiceProfile;
     const activeProfileSettings = activeVoiceProfile ? VOICE_PROFILES[activeVoiceProfile] : null;
 
     const selectModel = async (slotIndex: typeof server.modelSlotIndex) => {
