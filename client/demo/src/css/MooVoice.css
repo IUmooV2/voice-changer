@@ -806,3 +806,26 @@ body { margin: 0; background: var(--moo-bg); color: var(--moo-text); font-family
 .moo-jvs-tools + .moo-jvs-browser {
     margin-top: 10px;
 }
+
+
+/* Safe model management */
+.moo-panel-actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.moo-panel-actions button:first-child:not(:last-child) {
+    color: var(--moo-muted);
+}
+
+.moo-import-note.warning {
+    border: 1px solid rgba(238, 179, 104, 0.22);
+    color: #d9bea0;
+    background: rgba(238, 179, 104, 0.055);
+}
+
+.moo-import-note.warning strong {
+    color: #efc890;
+}
