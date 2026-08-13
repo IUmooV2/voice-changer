@@ -27,6 +27,7 @@ export const MooVoiceShell = () => {
     const computeLabel = server.gpu === -1 ? "CPU" : selectedGpu?.name || (engineConnected ? "GPU not selected" : "Engine offline");
     const [mode, setMode] = useState<Mode>(() => window.localStorage.getItem(MODE_KEY) === "advanced" ? "advanced" : "simple");
     const [preset, setPreset] = useState<Preset>("balanced");
+    const [presetBusy, setPresetBusy] = useState(false);
     const [legacyVisible, setLegacyVisible] = useState(false);
     const [inputs, setInputs] = useState<MediaDeviceInfo[]>([]);
     const [outputs, setOutputs] = useState<MediaDeviceInfo[]>([]);
@@ -68,6 +69,15 @@ export const MooVoiceShell = () => {
             window.clearInterval(timer);
         };
     }, []);
+
+    useEffect(() => {
+        if (!engineConnected || !server.gpus?.length || selectedGpu) return;
+        const preferredGpu = server.gpus[0];
+        appState.serverSetting.updateServerSettings({
+            ...server,
+            gpu: preferredGpu.id,
+        }).catch(() => undefined);
+    }, [engineConnected, server.gpu, server.gpus?.length]);
 
     useEffect(() => {
         loadDevices();
@@ -147,6 +157,47 @@ export const MooVoiceShell = () => {
         }
     };
 
+    const applyPreset = async (nextPreset: Preset) => {
+        const profiles: Record<Preset, { chunk: number; extra: number; quality: number }> = {
+            "low-latency": { chunk: 64, extra: 4096, quality: 0 },
+            balanced: { chunk: 96, extra: 8192, quality: 1 },
+            studio: { chunk: 192, extra: 16384, quality: 1 },
+        };
+        const profile = profiles[nextPreset];
+        setPreset(nextPreset);
+        if (!engineConnected) return;
+        setPresetBusy(true);
+        try {
+            appState.setWorkletNodeSetting({
+                ...appState.setting.workletNodeSetting,
+                inputChunkNum: profile.chunk,
+            });
+            await appState.serverSetting.updateServerSettings({
+                ...server,
+                serverReadChunkSize: profile.chunk,
+                extraConvertSize: profile.extra,
+                rvcQuality: profile.quality,
+                f0Detector: "rmvpe_onnx",
+            });
+            await appState.trancateBuffer();
+        } finally {
+            setPresetBusy(false);
+        }
+    };
+
+    const selectGpu = async (gpu: number) => {
+        await appState.serverSetting.updateServerSettings({ ...server, gpu });
+    };
+
+    const selectModel = async (slotIndex: number | string) => {
+        await appState.serverSetting.updateServerSettings({
+            ...server,
+            modelSlotIndex: typeof slotIndex === "number" ? slotIndex : Number(slotIndex),
+        });
+    };
+
+    const availableModels = modelSlots.filter((slot) => Boolean(slot.modelFile));
+
     const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
     return (
@@ -191,7 +242,22 @@ export const MooVoiceShell = () => {
                 <section className="moo-grid">
                     <article className="moo-panel" id="moo-models">
                         <div className="moo-panel-heading"><div><span className="moo-icon">◉</span><div><h3>Voice model</h3><p>Choose how you want to sound</p></div></div><button onClick={() => setLegacyVisible(true)}>Browse models</button></div>
-                        <div className={modelReady ? "moo-empty model-ready" : "moo-empty"} onClick={() => setLegacyVisible(true)}><div className="moo-empty-icon">{modelReady ? "✓" : "＋"}</div><div><strong>{modelReady ? selectedModel?.name || "Voice model selected" : "No model selected"}</strong><span>{modelReady ? `${selectedModel?.voiceChangerType} · slot ${selectedModel?.slotIndex}` : "Open the model library to import an RVC model"}</span></div></div>
+                        {availableModels.length > 0 ? (
+                            <div className="moo-model-list">
+                                {availableModels.slice(0, 8).map((slot) => (
+                                    <button
+                                        key={String(slot.slotIndex)}
+                                        className={String(slot.slotIndex) === String(server.modelSlotIndex) ? "moo-model-option active" : "moo-model-option"}
+                                        onClick={() => selectModel(slot.slotIndex)}
+                                    >
+                                        <span>{String(slot.name || "Voice").slice(0, 1).toUpperCase()}</span>
+                                        <div><strong>{slot.name || `Voice ${slot.slotIndex}`}</strong><small>{slot.voiceChangerType}</small></div>
+                                    </button>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="moo-empty" onClick={() => setLegacyVisible(true)}><div className="moo-empty-icon">＋</div><div><strong>No model selected</strong><span>Open the model library to import an RVC model</span></div></div>
+                        )}
                     </article>
 
                     <article className="moo-panel" id="moo-audio">
@@ -204,8 +270,8 @@ export const MooVoiceShell = () => {
                 </section>
 
                 <section className="moo-performance" id="moo-performance">
-                    <div className="moo-section-title"><div><h3>Performance preset</h3><p>Preset selection will be connected to the engine after calibration.</p></div><span>{engineConnected ? computeLabel : "Connect engine to detect hardware"}</span></div>
-                    <div className="moo-preset-grid">{[["low-latency","Low Latency","Fastest response for live chat","Discord · Game chat"],["balanced","Balanced","The best starting point","Everyday use"],["studio","Studio","Prioritize sound quality","Recording · Production"]].map(([id,title,copy,meta]) => <button key={id} className={preset === id ? "moo-preset active" : "moo-preset"} onClick={() => setPreset(id as Preset)}><span className="moo-radio" /><strong>{title}</strong><small>{copy}</small><em>{meta}</em></button>)}</div>
+                    <div className="moo-section-title"><div><h3>Performance preset</h3><p>{presetBusy ? "Applying engine settings…" : "Choose a tuned starting point for your workload."}</p></div>{engineConnected && server.gpus?.length ? <label className="moo-gpu-select"><span>COMPUTE</span><select value={server.gpu} onChange={(event) => selectGpu(Number(event.target.value))}>{server.gpus.map((gpu) => <option key={gpu.id} value={gpu.id}>{gpu.name}</option>)}<option value={-1}>CPU</option></select></label> : <span>Connect engine to detect hardware</span>}</div>
+                    <div className="moo-preset-grid">{[["low-latency","Low Latency","Fastest response for live chat","Discord · Game chat"],["balanced","Balanced","The best starting point","Everyday use"],["studio","Studio","Prioritize sound quality","Recording · Production"]].map(([id,title,copy,meta]) => <button key={id} className={preset === id ? "moo-preset active" : "moo-preset"} onClick={() => applyPreset(id as Preset)} disabled={presetBusy}><span className="moo-radio" /><strong>{title}</strong><small>{copy}</small><em>{meta}</em></button>)}</div>
                 </section>
 
                 {mode === "advanced" && <section className="moo-advanced"><div><span>Chunk size</span><strong>Automatic</strong></div><div><span>Pitch detector</span><strong>RMVPE</strong></div><div><span>Compute device</span><strong>{computeLabel}</strong></div><div><span>Buffer protection</span><strong>Enabled</strong></div></section>}
