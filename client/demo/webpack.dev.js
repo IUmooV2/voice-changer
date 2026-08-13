@@ -4,10 +4,10 @@ const common = require("./webpack.common.js");
 
 const engineTarget = process.env.MOOVOICE_ENGINE_URL || "http://127.0.0.1:18888";
 
-// Watchpack reports Windows paths with backslashes. Regexes keep protected
-// system files out of its initial scan without disabling project hot reload.
-const windowsSystemFiles =
-    /^[A-Za-z]:[\\/](?:DumpStack\.log\.tmp|hiberfil\.sys|pagefile\.sys|swapfile\.sys)$/i;
+// This Webpack version accepts one RegExp or an array of glob strings.
+// A single RegExp handles both Windows separators and protected system files.
+const ignoredWatchPaths =
+    /(?:[\\/](?:node_modules|dist|logs|\.git)[\\/])|(?:^[A-Za-z]:[\\/](?:DumpStack\.log\.tmp|hiberfil\.sys|pagefile\.sys|swapfile\.sys)$)/i;
 
 module.exports = merge(common, {
     mode: "development",
@@ -15,13 +15,7 @@ module.exports = merge(common, {
         aggregateTimeout: 250,
         poll: 1000,
         followSymlinks: false,
-        ignored: [
-            /[\\/]node_modules[\\/]/,
-            /[\\/]dist[\\/]/,
-            /[\\/]logs[\\/]/,
-            /[\\/]\.git[\\/]/,
-            windowsSystemFiles,
-        ],
+        ignored: ignoredWatchPaths,
     },
     devServer: {
         static: {
