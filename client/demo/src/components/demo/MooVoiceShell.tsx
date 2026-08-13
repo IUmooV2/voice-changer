@@ -68,6 +68,8 @@ export const MooVoiceShell = () => {
         return saved.map((item) => typeof item === "number" ? jvsFavoriteKey(item, 0) : item);
     });
     const [jvsAliases, setJvsAliases] = useState<Record<string, string>>(() => readJsonSetting<Record<string, string>>(JVS_ALIASES_KEY, {}));
+    const [modelQuery, setModelQuery] = useState("");
+    const [jvsFavoritesOnly, setJvsFavoritesOnly] = useState(false);
 
     const loadDevices = async () => {
         if (!navigator.mediaDevices?.enumerateDevices) return;
@@ -282,9 +284,14 @@ export const MooVoiceShell = () => {
         guiState.setBeatriceJVSSpeakerPitch(pitch);
     };
 
+    const jvsFavoriteSpeakerIds = Array.from(new Set(jvsFavorites.map((item) => Number(item.split(":")[0])))).sort((a, b) => a - b);
+    const jvsBrowseIds = jvsFavoritesOnly && jvsFavoriteSpeakerIds.length > 0 ? jvsFavoriteSpeakerIds : Array.from({ length: 100 }, (_, index) => index + 1);
+
     const stepBeatriceVoice = (direction: -1 | 1) => {
-        const next = ((guiState.beatriceJVSSpeakerId - 1 + direction + 100) % 100) + 1;
-        updateBeatriceVoice(next, guiState.beatriceJVSSpeakerPitch);
+        const currentIndex = jvsBrowseIds.indexOf(guiState.beatriceJVSSpeakerId);
+        const baseIndex = currentIndex >= 0 ? currentIndex : direction > 0 ? -1 : 0;
+        const nextIndex = (baseIndex + direction + jvsBrowseIds.length) % jvsBrowseIds.length;
+        updateBeatriceVoice(jvsBrowseIds[nextIndex], guiState.beatriceJVSSpeakerPitch);
     };
 
     const toggleJvsFavorite = () => {
@@ -324,6 +331,11 @@ export const MooVoiceShell = () => {
     };
 
     const availableModels = modelSlots.filter((slot) => Boolean(slot.modelFile));
+    const visibleModels = availableModels.filter((slot) => {
+        const query = modelQuery.trim().toLocaleLowerCase();
+        if (!query) return true;
+        return `${slot.name || ""} ${slot.voiceChangerType || ""}`.toLocaleLowerCase().includes(query);
+    });
 
     const openImporter = () => {
         const openSlot = modelSlots.findIndex((slot) => !slot.modelFile);
@@ -459,9 +471,10 @@ export const MooVoiceShell = () => {
                 <section className="moo-grid">
                     <article className="moo-panel" id="moo-models">
                         <div className="moo-panel-heading"><div><span className="moo-icon">◉</span><div><h3>Voice model</h3><p>Choose how you want to sound</p></div></div><button onClick={openImporter}>Import model</button></div>
+                        {availableModels.length > 4 && <div className="moo-library-search"><span>⌕</span><input value={modelQuery} onChange={(event) => setModelQuery(event.target.value)} placeholder="Search voice models…" />{modelQuery && <button onClick={() => setModelQuery("")} aria-label="Clear model search">×</button>}</div>}
                         {availableModels.length > 0 ? (
-                            <div className="moo-model-list">
-                                {availableModels.slice(0, 8).map((slot) => (
+                            visibleModels.length > 0 ? <div className="moo-model-list">
+                                {visibleModels.slice(0, 12).map((slot) => (
                                     <button
                                         key={String(slot.slotIndex)}
                                         className={String(slot.slotIndex) === String(server.modelSlotIndex) ? "moo-model-option active" : "moo-model-option"}
@@ -471,7 +484,7 @@ export const MooVoiceShell = () => {
                                         <div><strong>{slot.name || `Voice ${slot.slotIndex}`}</strong><small>{slot.voiceChangerType}</small></div>
                                     </button>
                                 ))}
-                            </div>
+                            </div> : <div className="moo-library-empty">No voice models match “{modelQuery}”.</div>
                         ) : (
                             <div className="moo-empty" onClick={openImporter}><div className="moo-empty-icon">＋</div><div><strong>No model selected</strong><span>Import an RVC .pth or .onnx model</span></div></div>
                         )}
@@ -524,6 +537,7 @@ export const MooVoiceShell = () => {
                             <div><h3>JVS voice browser</h3><p>Explore Japanese-trained Beatrice voices and save the ones that work for you.</p></div>
                             <span>Beatrice · JVS</span>
                         </div>
+                        <div className="moo-jvs-tools"><button className={!jvsFavoritesOnly ? "active" : ""} onClick={() => setJvsFavoritesOnly(false)}>All 100</button><button className={jvsFavoritesOnly ? "active" : ""} onClick={() => setJvsFavoritesOnly(true)} disabled={jvsFavoriteSpeakerIds.length === 0}>★ Favorites {jvsFavoriteSpeakerIds.length > 0 ? `(${jvsFavoriteSpeakerIds.length})` : ""}</button></div>
                         <div className="moo-jvs-browser">
                             <button onClick={() => stepBeatriceVoice(-1)} aria-label="Previous JVS speaker">‹</button>
                             <div className="moo-jvs-current">
@@ -538,8 +552,7 @@ export const MooVoiceShell = () => {
                             {mode === "advanced" && <label className="moo-field">
                                 <span>JVS SPEAKER</span>
                                 <select value={guiState.beatriceJVSSpeakerId} onChange={(event) => updateBeatriceVoice(Number(event.target.value), guiState.beatriceJVSSpeakerPitch)}>
-                                    {Array.from({ length: 100 }).map((_, index) => {
-                                        const id = index + 1;
+                                    {jvsBrowseIds.map((id) => {
                                         const alias = jvsAliases[String(id)];
                                         const favorite = jvsFavorites.some((item) => item.startsWith(`${id}:`)) ? "★ " : "";
                                         return <option key={id} value={id}>{favorite}{alias || `JVS ${String(id).padStart(3, "0")}`}</option>;
