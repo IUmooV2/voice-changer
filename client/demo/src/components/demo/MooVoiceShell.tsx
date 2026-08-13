@@ -78,6 +78,7 @@ export const MooVoiceShell = () => {
 
     useEffect(() => {
         window.localStorage.setItem(MODE_KEY, mode);
+        if (mode === "simple") setLegacyVisible(false);
     }, [mode]);
 
     useEffect(() => {
@@ -431,6 +432,11 @@ export const MooVoiceShell = () => {
                     <div className="moo-mode-switch" role="group" aria-label="Interface mode"><button className={mode === "simple" ? "active" : ""} onClick={() => setMode("simple")}>Simple</button><button className={mode === "advanced" ? "active" : ""} onClick={() => setMode("advanced")}>Advanced</button></div>
                 </header>
 
+                <section className={`moo-mode-summary ${mode}`} aria-live="polite">
+                    <div><strong>{mode === "simple" ? "Simple mode" : "Advanced mode"}</strong><span>{mode === "simple" ? "Everyday controls with technical settings handled for you." : "Fine tuning, engine details, compute selection, and compatibility controls are visible."}</span></div>
+                    <span>{mode === "simple" ? "ESSENTIALS" : "FULL CONTROL"}</span>
+                </section>
+
                 {!engineConnected && engineCheckComplete && (
                     <section className="moo-engine-setup">
                         <div className="moo-engine-setup-icon">!</div>
@@ -492,7 +498,7 @@ export const MooVoiceShell = () => {
                             <button onClick={() => applyVoiceProfile("bright")}><strong>Bright</strong><small>Higher, lighter range</small></button>
                             <button onClick={() => applyVoiceProfile("deep")}><strong>Deep</strong><small>Lower, heavier range</small></button>
                         </div>
-                        <div className="moo-transform-grid">
+                        {mode === "advanced" && <div className="moo-transform-grid">
                             <label className="moo-slider">
                                 <div><span>Pitch shift</span><strong>{server.tran > 0 ? "+" : ""}{server.tran || 0} semitones</strong></div>
                                 <input type="range" min="-12" max="12" step="1" value={server.tran || 0} onChange={(event) => updateTransformation({ tran: Number(event.target.value) })} />
@@ -508,7 +514,7 @@ export const MooVoiceShell = () => {
                                 <input type="range" min="0" max="0.5" step="0.01" value={server.protect ?? 0.33} onChange={(event) => updateTransformation({ protect: Number(event.target.value) })} />
                                 <small>More transformation</small><small>Clearer consonants</small>
                             </label>
-                        </div>
+                        </div>}
                     </section>
                 )}
 
@@ -528,8 +534,8 @@ export const MooVoiceShell = () => {
                             <button onClick={() => stepBeatriceVoice(1)} aria-label="Next JVS speaker">›</button>
                             <button className={jvsFavorites.includes(jvsFavoriteKey(guiState.beatriceJVSSpeakerId, guiState.beatriceJVSSpeakerPitch)) ? "moo-jvs-favorite active" : "moo-jvs-favorite"} onClick={toggleJvsFavorite} aria-label="Favorite this voice and range">{jvsFavorites.includes(jvsFavoriteKey(guiState.beatriceJVSSpeakerId, guiState.beatriceJVSSpeakerPitch)) ? "★ Saved" : "☆ Save"}</button>
                         </div>
-                        <div className="moo-transform-grid">
-                            <label className="moo-field">
+                        <div className={mode === "advanced" ? "moo-transform-grid" : "moo-transform-grid simple-jvs"}>
+                            {mode === "advanced" && <label className="moo-field">
                                 <span>JVS SPEAKER</span>
                                 <select value={guiState.beatriceJVSSpeakerId} onChange={(event) => updateBeatriceVoice(Number(event.target.value), guiState.beatriceJVSSpeakerPitch)}>
                                     {Array.from({ length: 100 }).map((_, index) => {
@@ -539,7 +545,7 @@ export const MooVoiceShell = () => {
                                         return <option key={id} value={id}>{favorite}{alias || `JVS ${String(id).padStart(3, "0")}`}</option>;
                                     })}
                                 </select>
-                            </label>
+                            </label>}
                             <label className="moo-field">
                                 <span>VOICE RANGE</span>
                                 <select value={guiState.beatriceJVSSpeakerPitch} onChange={(event) => updateBeatriceVoice(guiState.beatriceJVSSpeakerId, Number(event.target.value))}>
@@ -550,10 +556,10 @@ export const MooVoiceShell = () => {
                                     <option value={2}>Much higher</option>
                                 </select>
                             </label>
-                            <label className="moo-field">
+                            {mode === "advanced" && <label className="moo-field">
                                 <span>MY NAME FOR THIS VOICE</span>
                                 <input value={jvsAliases[String(guiState.beatriceJVSSpeakerId)] || ""} onChange={(event) => updateJvsAlias(event.target.value)} placeholder="Example: Soft, Bright, Narrator…" />
-                            </label>
+                            </label>}
                         </div>
                         {jvsFavorites.length > 0 && <div className="moo-jvs-saved"><strong>Saved voices</strong>{jvsFavorites.map((item) => { const [speakerValue, pitchValue] = item.split(":").map(Number); const active = speakerValue === guiState.beatriceJVSSpeakerId && pitchValue === guiState.beatriceJVSSpeakerPitch; return <button key={item} className={active ? "active" : ""} onClick={() => updateBeatriceVoice(speakerValue, pitchValue)}><span>{jvsAliases[String(speakerValue)] || `JVS ${String(speakerValue).padStart(3, "0")}`}</span><small>{JVS_RANGE_LABELS[pitchValue]}</small></button>; })}</div>}
                         <div className="moo-import-note"><strong>Japanese-trained</strong><span>English may inherit Japanese pronunciation and rhythm. These voices are best treated as experimental styles, not natural English models.</span></div>
@@ -561,14 +567,14 @@ export const MooVoiceShell = () => {
                 )}
 
                 <section className="moo-performance" id="moo-performance">
-                    <div className="moo-section-title"><div><h3>Performance preset</h3><p>{presetBusy ? "Applying engine settings…" : "Choose a tuned starting point for your workload."}</p></div>{engineConnected && server.gpus?.length ? <label className="moo-gpu-select"><span>COMPUTE</span><select value={server.gpu} onChange={(event) => selectGpu(Number(event.target.value))}>{server.gpus.map((gpu) => <option key={gpu.id} value={gpu.id}>{gpu.name}</option>)}<option value={-1}>CPU</option></select></label> : <span>Connect engine to detect hardware</span>}</div>
+                    <div className="moo-section-title"><div><h3>Performance preset</h3><p>{presetBusy ? "Applying engine settings…" : "Choose a tuned starting point for your workload."}</p></div>{mode === "advanced" && engineConnected && server.gpus?.length ? <label className="moo-gpu-select"><span>COMPUTE</span><select value={server.gpu} onChange={(event) => selectGpu(Number(event.target.value))}>{server.gpus.map((gpu) => <option key={gpu.id} value={gpu.id}>{gpu.name}</option>)}<option value={-1}>CPU</option></select></label> : mode === "advanced" ? <span>Connect engine to detect hardware</span> : <span>Auto-tuned for your hardware</span>}</div>
                     <div className="moo-preset-grid">{[["low-latency","Low Latency","Fastest response for live chat","Discord · Game chat"],["balanced","Balanced","The best starting point","Everyday use"],["studio","Studio","Prioritize sound quality","Recording · Production"]].map(([id,title,copy,meta]) => <button key={id} className={preset === id ? "moo-preset active" : "moo-preset"} onClick={() => applyPreset(id as Preset)} disabled={presetBusy}><span className="moo-radio" /><strong>{title}</strong><small>{copy}</small><em>{meta}</em></button>)}</div>
                 </section>
 
                 {mode === "advanced" && <section className="moo-advanced"><div><span>Chunk size</span><strong>{appState.setting.workletNodeSetting.inputChunkNum}</strong></div><div><span>Pitch detector</span><strong>{server.f0Detector}</strong></div><div><span>Feature index influence</span><strong>{server.indexRatio}</strong></div><div><span>Protect</span><strong>{server.protect}</strong></div><div><span>Compute device</span><strong>{computeLabel}</strong></div><div><span>Extra buffer</span><strong>{server.extraConvertSize}</strong></div></section>}
 
-                <section className="moo-legacy-gate"><div><strong>Engine compatibility controls</strong><span>Use the original interface while MooVoice controls are being connected.</span></div><button onClick={() => setLegacyVisible((value) => !value)}>{legacyVisible ? "Hide legacy interface" : "Open legacy interface"}</button></section>
-                {legacyVisible && <div className="moo-legacy"><ModelSlotControl /></div>}
+                {mode === "advanced" && <section className="moo-legacy-gate"><div><strong>Engine compatibility controls</strong><span>Use the original interface for controls MooVoice has not modernized yet.</span></div><button onClick={() => setLegacyVisible((value) => !value)}>{legacyVisible ? "Hide legacy interface" : "Open legacy interface"}</button></section>}
+                {mode === "advanced" && legacyVisible && <div className="moo-legacy"><ModelSlotControl /></div>}
                 {importOpen && (
                     <div className="moo-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !appState.serverSetting.isUploading) setImportOpen(false); }}>
                         <section className="moo-import-modal" role="dialog" aria-modal="true" aria-labelledby="moo-import-title">
