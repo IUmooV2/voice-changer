@@ -142,11 +142,11 @@ if (-not $SkipInterface) {
         Write-Step "Interface is already running. Reusing it." Green
     } else {
         Write-Step "Starting the MooVoice interface..."
-        $engineProtocol = if ((Test-Path (Join-Path $resolvedEngineDirectory "start_https.bat")) -or (-not $resolvedEngineDirectory)) { "https" } else { "http" }
+        $engineProtocol = if (-not $resolvedEngineDirectory) { "https" } elseif (Test-Path (Join-Path $resolvedEngineDirectory "start_https.bat")) { "https" } else { "http" }
         $env:MOOVOICE_ENGINE_URL = "${engineProtocol}://127.0.0.1:$EnginePort"
         $escapedDemoDirectory = $DemoDirectory.Replace("'", "''")
         $escapedLogDirectory = $LogDirectory.Replace("'", "''")
-        $command = "$host.UI.RawUI.WindowTitle='MooVoice Interface'; Set-Location -LiteralPath '$escapedDemoDirectory'; npm start 2>&1 | Tee-Object -FilePath (Join-Path '$escapedLogDirectory' 'interface.log')"
+        $command = "`$host.UI.RawUI.WindowTitle='MooVoice Interface'; Set-Location -LiteralPath '$escapedDemoDirectory'; npm start 2>&1 | Tee-Object -FilePath (Join-Path '$escapedLogDirectory' 'interface.log')"
         $windowStyle = if ($ShowServiceWindows) { "Normal" } else { "Minimized" }
         $interfaceProcess = Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $command -WorkingDirectory $DemoDirectory -WindowStyle $windowStyle -PassThru
         Wait-ForPort "MooVoice interface" $InterfacePort 120 $interfaceProcess
