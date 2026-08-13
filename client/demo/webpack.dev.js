@@ -56,25 +56,5 @@ module.exports = merge(common, {
                 ws: true,
             },
         ],
-        watchFiles: {
-            paths: [
-                path.join(__dirname, "src/**/*"),
-                path.join(__dirname, "public/**/*"),
-            ],
-            options: {
-                usePolling: true,
-                interval: 1000,
-                awaitWriteFinish: {
-                    stabilityThreshold: 200,
-                    pollInterval: 50,
-                },
-                ignored: [
-                    "**/node_modules/**",
-                    "**/dist/**",
-                    "**/logs/**",
-                    "**/.git/**",
-                ],
-            },
-        },
-    },
+},
 });
