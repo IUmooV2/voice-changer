@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { ModelUploadSetting } from "@dannadori/voice-changer-client-js";
 import { ModelSlotControl } from "./b00_ModelSlotControl";
 import { useAppState } from "../../001_provider/001_AppStateProvider";
@@ -26,6 +26,30 @@ const readJsonSetting = <T,>(key: string, fallback: T): T => {
     } catch {
         return fallback;
     }
+};
+
+const createWavBlob = (samples: Float32Array, sampleRate = 48000) => {
+    const buffer = new ArrayBuffer(44 + samples.length * 2);
+    const view = new DataView(buffer);
+    const writeText = (offset: number, text: string) => Array.from(text).forEach((character, index) => view.setUint8(offset + index, character.charCodeAt(0)));
+    writeText(0, "RIFF");
+    view.setUint32(4, 36 + samples.length * 2, true);
+    writeText(8, "WAVE");
+    writeText(12, "fmt ");
+    view.setUint32(16, 16, true);
+    view.setUint16(20, 1, true);
+    view.setUint16(22, 1, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, sampleRate * 2, true);
+    view.setUint16(32, 2, true);
+    view.setUint16(34, 16, true);
+    writeText(36, "data");
+    view.setUint32(40, samples.length * 2, true);
+    samples.forEach((sample, index) => {
+        const value = Math.max(-1, Math.min(1, sample));
+        view.setInt16(44 + index * 2, value < 0 ? value * 0x8000 : value * 0x7fff, true);
+    });
+    return new Blob([buffer], { type: "audio/wav" });
 };
 
 const formatFileSize = (bytes: number) => {
@@ -75,9 +99,7 @@ export const MooVoiceShell = () => {
     const [auditionRecording, setAuditionRecording] = useState(false);
     const [auditionError, setAuditionError] = useState("");
     const [auditionClips, setAuditionClips] = useState<AuditionClip[]>([]);
-    const auditionRecorderRef = useRef<MediaRecorder | null>(null);
-    const auditionChunksRef = useRef<Blob[]>([]);
-    const auditionLabelRef = useRef({ label: "", detail: "" });
+    const [auditionLabel, setAuditionLabel] = useState({ label: "", detail: "" });
 
     const loadDevices = async () => {
         if (!navigator.mediaDevices?.enumerateDevices) return;
@@ -217,8 +239,12 @@ export const MooVoiceShell = () => {
             setAudioState("requesting");
             setAudioMessage("Connecting microphone, engine, and speaker…");
             await prepareAudioRoute();
+            await appState.trancateBuffer();
             await appState.start();
             guiState.setIsConverting(true);
+            setAudioMessage("Warming up the selected voice… wait a moment before speaking.");
+            await new Promise<void>((resolve) => window.setTimeout(resolve, 1400));
+            await appState.trancateBuffer();
             setAudioState("ready");
             setAudioMessage("Conversion is live. Speak into your microphone.");
         } catch (error) {
@@ -327,46 +353,29 @@ export const MooVoiceShell = () => {
 
     const startAuditionRecording = () => {
         setAuditionError("");
-        if (!guiState.isConverting) {
-            setAuditionError("Start voice conversion before recording a comparison clip.");
+        if (!guiState.isConverting || audioState !== "ready") {
+            setAuditionError("Wait until voice conversion finishes warming up, then record.");
             return;
         }
-        if (typeof MediaRecorder === "undefined") {
-            setAuditionError("This browser does not support converted-output recording.");
-            return;
-        }
-        const output = document.getElementById("moovoice-audio-output") as HTMLAudioElement | null;
-        const source = output?.srcObject;
-        if (!(source instanceof MediaStream) || source.getAudioTracks().length === 0) {
-            setAuditionError("The converted audio stream is not ready yet. Speak once, then try again.");
-            return;
-        }
-        const stream = new MediaStream(source.getAudioTracks());
-        const preferredType = ["audio/webm;codecs=opus", "audio/webm"].find((type) => MediaRecorder.isTypeSupported(type));
-        const recorder = preferredType ? new MediaRecorder(stream, { mimeType: preferredType }) : new MediaRecorder(stream);
-        auditionChunksRef.current = [];
-        auditionLabelRef.current = getAuditionLabel();
-        recorder.ondataavailable = (event) => { if (event.data.size > 0) auditionChunksRef.current.push(event.data); };
-        recorder.onerror = () => { setAuditionRecording(false); setAuditionError("The browser could not record the converted stream."); };
-        recorder.onstop = () => {
-            setAuditionRecording(false);
-            if (auditionChunksRef.current.length === 0) {
-                setAuditionError("No converted audio was captured. Keep conversion live and speak during recording.");
-                return;
-            }
-            const blob = new Blob(auditionChunksRef.current, { type: recorder.mimeType || "audio/webm" });
-            const url = URL.createObjectURL(blob);
-            const metadata = auditionLabelRef.current;
-            setAuditionClips((current) => [...current, { id: Date.now(), label: metadata.label, detail: metadata.detail, url }]);
-        };
-        auditionRecorderRef.current = recorder;
-        recorder.start(250);
+        appState.startOutputRecording();
+        setAuditionLabel(getAuditionLabel());
         setAuditionRecording(true);
     };
 
-    const stopAuditionRecording = () => {
-        const recorder = auditionRecorderRef.current;
-        if (recorder?.state === "recording") recorder.stop();
+    const stopAuditionRecording = async () => {
+        try {
+            const samples = await appState.stopOutputRecording();
+            setAuditionRecording(false);
+            if (!samples || samples.length < 2400) {
+                setAuditionError("No converted audio was captured. Keep conversion live and speak during recording.");
+                return;
+            }
+            const url = URL.createObjectURL(createWavBlob(samples));
+            setAuditionClips((current) => [...current, { id: Date.now(), label: auditionLabel.label, detail: auditionLabel.detail, url }]);
+        } catch {
+            setAuditionRecording(false);
+            setAuditionError("MooVoice could not finish the converted-output recording.");
+        }
     };
 
     const removeAuditionClip = (id: number) => {
