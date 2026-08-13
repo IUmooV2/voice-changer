@@ -258,6 +258,59 @@ body { margin: 0; background: var(--moo-bg); color: var(--moo-text); font-family
     transform: translateY(-1px);
 }
 
+.moo-profile-row button.active {
+    border-color: var(--moo-lilac);
+    background: linear-gradient(145deg, rgba(173, 122, 255, 0.2), rgba(113, 72, 181, 0.13));
+    box-shadow: inset 0 0 0 1px rgba(211, 182, 255, 0.12), 0 8px 24px rgba(82, 43, 137, 0.14);
+}
+
+.moo-profile-check {
+    color: var(--moo-muted);
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+}
+
+.moo-profile-row button.active .moo-profile-check {
+    color: var(--moo-lilac);
+}
+
+.moo-profile-selection {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 12px;
+    padding: 11px 14px;
+    border: 1px solid var(--moo-border);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.018);
+}
+
+.moo-profile-selection.active {
+    border-color: rgba(190, 139, 255, 0.34);
+    background: rgba(166, 105, 255, 0.065);
+}
+
+.moo-profile-selection > div {
+    display: flex;
+    align-items: baseline;
+    gap: 9px;
+}
+
+.moo-profile-selection > div span {
+    color: var(--moo-lilac);
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 0.11em;
+}
+
+.moo-profile-selection > small {
+    color: var(--moo-muted);
+    text-align: right;
+}
+
 .moo-profile-row small,
 .moo-slider small {
     color: var(--moo-muted);
@@ -318,6 +371,15 @@ body { margin: 0; background: var(--moo-bg); color: var(--moo-text); font-family
 @media (max-width: 560px) {
     .moo-profile-row {
         grid-template-columns: 1fr;
+    }
+
+    .moo-profile-selection {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .moo-profile-selection > small {
+        text-align: left;
     }
 }
 
