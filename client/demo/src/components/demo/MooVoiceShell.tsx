@@ -128,14 +128,45 @@ export const MooVoiceShell = () => {
         }
     };
 
+    const prepareAudioRoute = async () => {
+        const output = document.getElementById("moovoice-audio-output") as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
+        if (!output) throw new Error("MooVoice output element is unavailable.");
+
+        await appState.setVoiceChangerClientSetting({
+            ...appState.setting.voiceChangerClientSetting,
+            audioInput: inputId,
+            outputGain: Math.max(appState.setting.voiceChangerClientSetting.outputGain || 1, 1),
+        });
+
+        appState.setAudioOutputElementId("moovoice-audio-output");
+        output.volume = 1;
+        output.muted = false;
+        if (output.setSinkId) await output.setSinkId(outputId || "");
+        await output.play();
+        return output;
+    };
+
     const toggleConversion = async () => {
         if (!engineConnected || !modelReady || !inputId) return;
-        if (guiState.isConverting) {
-            guiState.setIsConverting(false);
-            await appState.stop();
-        } else {
-            guiState.setIsConverting(true);
+        try {
+            if (guiState.isConverting) {
+                await appState.stop();
+                guiState.setIsConverting(false);
+                setAudioMessage("Conversion stopped.");
+                return;
+            }
+
+            setAudioState("requesting");
+            setAudioMessage("Connecting microphone, engine, and speaker…");
+            await prepareAudioRoute();
             await appState.start();
+            guiState.setIsConverting(true);
+            setAudioState("ready");
+            setAudioMessage("Conversion is live. Speak into your microphone.");
+        } catch (error) {
+            guiState.setIsConverting(false);
+            setAudioState("error");
+            setAudioMessage(error instanceof Error ? error.message : "MooVoice could not start the audio route.");
         }
     };
 
@@ -148,8 +179,17 @@ export const MooVoiceShell = () => {
             });
             await loadDevices();
             const track = stream.getAudioTracks()[0];
+            const resolvedInputId = track?.getSettings().deviceId || inputId || "default";
+            if (!inputId) setInputId(resolvedInputId);
+            await appState.setVoiceChangerClientSetting({
+                ...appState.setting.voiceChangerClientSetting,
+                audioInput: resolvedInputId,
+            });
+
+            const output = document.getElementById("moovoice-audio-output") as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
+            if (output?.setSinkId) await output.setSinkId(outputId || "");
             setAudioState("ready");
-            setAudioMessage(`Microphone ready: ${track?.label || "default microphone"}`);
+            setAudioMessage(`Microphone ready: ${track?.label || "default microphone"}. Select a voice and start converting.`);
             window.setTimeout(() => stream.getTracks().forEach((item) => item.stop()), 1500);
         } catch (error) {
             setAudioState("error");
@@ -278,8 +318,8 @@ export const MooVoiceShell = () => {
 
                 <section className="moo-legacy-gate"><div><strong>Engine compatibility controls</strong><span>Use the original interface while MooVoice controls are being connected.</span></div><button onClick={() => setLegacyVisible((value) => !value)}>{legacyVisible ? "Hide legacy interface" : "Open legacy interface"}</button></section>
                 {legacyVisible && <div className="moo-legacy"><ModelSlotControl /></div>}
-                <audio hidden id="moovoice-audio-output" />
-                <audio hidden id="moovoice-audio-monitor" />
+                <audio hidden id="moovoice-audio-output" autoPlay playsInline />
+                <audio hidden id="moovoice-audio-monitor" autoPlay playsInline />
             </main>
         </div>
     );
