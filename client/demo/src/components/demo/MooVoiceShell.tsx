@@ -549,7 +549,7 @@ export const MooVoiceShell = () => {
     };
 
     const availableModels = modelSlots.filter((slot) => Boolean(slot.modelFile));
-    const selectedModelMetadata = selectedModel?.voiceChangerType === "RVC"
+    const selectedModelMetadata: RvcMetadata = selectedModel?.voiceChangerType === "RVC"
         ? rvcMetadata[rvcPreferenceKey(selectedModel)] || {}
         : {};
     const favoriteModelCount = availableModels.filter((slot) => slot.voiceChangerType === "RVC" && rvcMetadata[rvcPreferenceKey(slot)]?.favorite).length;
