@@ -8,6 +8,8 @@ module.exports = merge(common, {
     mode: "development",
     watchOptions: {
         aggregateTimeout: 250,
+        poll: 1000,
+        followSymlinks: false,
         ignored: [
             "**/node_modules/**",
             "**/dist/**",
@@ -22,6 +24,7 @@ module.exports = merge(common, {
     devServer: {
         static: {
             directory: path.join(__dirname, "public"),
+            watch: false,
         },
         client: {
             overlay: {
@@ -59,7 +62,8 @@ module.exports = merge(common, {
                 path.join(__dirname, "public/**/*"),
             ],
             options: {
-                usePolling: false,
+                usePolling: true,
+                interval: 1000,
                 awaitWriteFinish: {
                     stabilityThreshold: 200,
                     pollInterval: 50,
