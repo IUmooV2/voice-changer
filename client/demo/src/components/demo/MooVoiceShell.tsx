@@ -13,6 +13,7 @@ type AuditionClip = { id: number; sampleNumber: number; label: string; detail: s
 const MODE_KEY = "moovoice.ui.mode";
 const INPUT_KEY = "moovoice.audio.input";
 const OUTPUT_KEY = "moovoice.audio.output";
+const RVC_PREFERENCES_KEY = "moovoice.rvc.preferences";
 const MAX_MODEL_BYTES = 2 * 1024 * 1024 * 1024;
 const MAX_INDEX_BYTES = 1024 * 1024 * 1024;
 const JVS_FAVORITES_KEY = "moovoice.jvs.favorites";
@@ -25,6 +26,7 @@ const VOICE_PROFILES: Record<VoiceProfile, { tran: number; indexRatio: number; p
     deep: { tran: -5, indexRatio: 0.72, protect: 0.3, label: "Deep", description: "Lower, heavier range" },
 };
 const jvsFavoriteKey = (speakerId: number, pitch: number) => `${speakerId}:${pitch}`;
+const rvcPreferenceKey = (slot: { slotIndex: string | number; modelFile?: string; name?: string }) => `${String(slot.slotIndex)}:${String(slot.modelFile || slot.name || "rvc")}`;
 
 const readJsonSetting = <T,>(key: string, fallback: T): T => {
     try {
@@ -82,6 +84,9 @@ export const MooVoiceShell = () => {
     const [mode, setMode] = useState<Mode>(() => window.localStorage.getItem(MODE_KEY) === "advanced" ? "advanced" : "simple");
     const [preset, setPreset] = useState<Preset>("balanced");
     const [presetBusy, setPresetBusy] = useState(false);
+    const [rvcPreferences, setRvcPreferences] = useState<Record<string, { tran: number; indexRatio: number; protect: number }>>(
+        () => readJsonSetting<Record<string, { tran: number; indexRatio: number; protect: number }>>(RVC_PREFERENCES_KEY, {})
+    );
     const [legacyVisible, setLegacyVisible] = useState(false);
     const [importOpen, setImportOpen] = useState(false);
     const [importName, setImportName] = useState("");
@@ -170,6 +175,10 @@ export const MooVoiceShell = () => {
     useEffect(() => {
         window.localStorage.setItem(JVS_FAVORITES_KEY, JSON.stringify(jvsFavorites));
     }, [jvsFavorites]);
+
+    useEffect(() => {
+        window.localStorage.setItem(RVC_PREFERENCES_KEY, JSON.stringify(rvcPreferences));
+    }, [rvcPreferences]);
 
     useEffect(() => {
         window.localStorage.setItem(JVS_ALIASES_KEY, JSON.stringify(jvsAliases));
@@ -415,7 +424,16 @@ export const MooVoiceShell = () => {
     };
 
     const updateTransformation = async (changes: { tran?: number; indexRatio?: number; protect?: number }) => {
-        await appState.serverSetting.updateServerSettings({ ...server, ...changes });
+        const nextSettings = {
+            tran: changes.tran ?? Number(server.tran || 0),
+            indexRatio: changes.indexRatio ?? Number(server.indexRatio || 0),
+            protect: changes.protect ?? Number(server.protect ?? 0.33),
+        };
+        await appState.serverSetting.updateServerSettings({ ...server, ...nextSettings });
+        if (selectedModel?.voiceChangerType === "RVC") {
+            const key = rvcPreferenceKey(selectedModel);
+            setRvcPreferences((current) => ({ ...current, [key]: nextSettings }));
+        }
     };
 
     const applyVoiceProfile = async (profile: VoiceProfile) => {
@@ -432,9 +450,15 @@ export const MooVoiceShell = () => {
     const activeProfileSettings = activeVoiceProfile ? VOICE_PROFILES[activeVoiceProfile] : null;
 
     const selectModel = async (slotIndex: typeof server.modelSlotIndex) => {
+        const targetModel = modelSlots.find((slot) => String(slot.slotIndex) === String(slotIndex))
+            || (typeof slotIndex === "number" ? modelSlots[slotIndex] : undefined);
+        const savedSettings = targetModel?.voiceChangerType === "RVC"
+            ? rvcPreferences[rvcPreferenceKey(targetModel)]
+            : undefined;
         await appState.serverSetting.updateServerSettings({
             ...server,
             modelSlotIndex: slotIndex,
+            ...(savedSettings || {}),
         });
     };
 
@@ -628,7 +652,7 @@ export const MooVoiceShell = () => {
                         </div>
                         <div className={activeVoiceProfile ? "moo-profile-selection active" : "moo-profile-selection"}>
                             <div><span>{activeVoiceProfile ? "ACTIVE PROFILE" : "CUSTOM SETTINGS"}</span><strong>{activeProfileSettings?.label || "Custom tuning"}</strong></div>
-                            <small>Pitch {Number(server.tran || 0) > 0 ? "+" : ""}{Number(server.tran || 0)} · Similarity {Math.round(Number(server.indexRatio || 0) * 100)}% · Detail {Math.round(Number(server.protect ?? 0.33) * 100)}%</small>
+                            <small>Pitch {Number(server.tran || 0) > 0 ? "+" : ""}{Number(server.tran || 0)} · Similarity {Math.round(Number(server.indexRatio || 0) * 100)}% · Detail {Math.round(Number(server.protect ?? 0.33) * 100)}% · Remembered for this model</small>
                         </div>
                         {mode === "advanced" && <div className="moo-transform-grid">
                             <label className="moo-slider">
