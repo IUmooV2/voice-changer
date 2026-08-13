@@ -537,3 +537,120 @@ body { margin: 0; background: var(--moo-bg); color: var(--moo-text); font-family
         display: grid;
     }
 }
+
+
+/* JVS voice browser */
+.moo-jvs-browser {
+    display: grid;
+    grid-template-columns: 46px minmax(0, 1fr) 46px auto;
+    gap: 10px;
+    align-items: stretch;
+    margin-top: 20px;
+}
+
+.moo-jvs-browser > button {
+    border: 1px solid var(--moo-border);
+    border-radius: 12px;
+    color: var(--moo-lilac-bright);
+    background: rgba(166, 105, 255, 0.06);
+    font-size: 25px;
+    cursor: pointer;
+}
+
+.moo-jvs-browser > button:hover,
+.moo-jvs-browser > button.active {
+    border-color: var(--moo-lilac);
+    background: rgba(166, 105, 255, 0.14);
+}
+
+.moo-jvs-current {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+    padding: 13px 16px;
+    border: 1px solid var(--moo-border);
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.moo-jvs-current small {
+    color: var(--moo-muted);
+    font-size: 9px;
+    letter-spacing: 0.14em;
+}
+
+.moo-jvs-current strong {
+    overflow: hidden;
+    color: var(--moo-text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.moo-jvs-current span {
+    color: var(--moo-muted);
+    font-size: 10px;
+}
+
+.moo-jvs-browser .moo-jvs-favorite {
+    min-width: 88px;
+    padding: 0 14px;
+    color: var(--moo-muted);
+    font-size: 11px;
+    font-weight: 750;
+}
+
+.moo-jvs-browser .moo-jvs-favorite.active {
+    color: var(--moo-lilac-bright);
+}
+
+.moo-transform .moo-field input {
+    width: 100%;
+    border: 1px solid var(--moo-border);
+    border-radius: 10px;
+    padding: 12px 13px;
+    color: var(--moo-text);
+    background: var(--moo-input);
+}
+
+.moo-jvs-saved {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    margin-top: 15px;
+}
+
+.moo-jvs-saved > strong {
+    margin-right: 4px;
+    color: var(--moo-muted);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.moo-jvs-saved button {
+    border: 1px solid var(--moo-border);
+    border-radius: 999px;
+    padding: 7px 11px;
+    color: var(--moo-muted);
+    background: rgba(255, 255, 255, 0.02);
+    cursor: pointer;
+}
+
+.moo-jvs-saved button:hover,
+.moo-jvs-saved button.active {
+    border-color: var(--moo-lilac);
+    color: var(--moo-lilac-bright);
+    background: rgba(166, 105, 255, 0.1);
+}
+
+@media (max-width: 680px) {
+    .moo-jvs-browser {
+        grid-template-columns: 42px minmax(0, 1fr) 42px;
+    }
+
+    .moo-jvs-browser .moo-jvs-favorite {
+        grid-column: 1 / -1;
+        min-height: 40px;
+    }
+}
