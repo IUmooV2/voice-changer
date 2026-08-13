@@ -14,12 +14,15 @@ const OUTPUT_KEY = "moovoice.audio.output";
 export const MooVoiceShell = () => {
     const appState = useAppState();
     const guiState = useGuiState();
-    const engineConnected = appState.initialized;
+    const clientReady = appState.initialized;
+    const [engineOnline, setEngineOnline] = useState(false);
+    const [engineCheckComplete, setEngineCheckComplete] = useState(false);
+    const engineConnected = clientReady && engineOnline;
     const server = appState.serverSetting.serverSetting;
     const modelSlots = server.modelSlots || [];
     const selectedModel = modelSlots.find((slot) => String(slot.slotIndex) === String(server.modelSlotIndex))
         || (typeof server.modelSlotIndex === "number" ? modelSlots[server.modelSlotIndex] : undefined);
-    const modelReady = Boolean(selectedModel?.modelFile);
+    const modelReady = engineConnected && Boolean(selectedModel?.modelFile);
     const selectedGpu = server.gpus?.find((gpu) => gpu.id === server.gpu);
     const computeLabel = server.gpu === -1 ? "CPU" : selectedGpu?.name || (engineConnected ? "GPU not selected" : "Engine offline");
     const [mode, setMode] = useState<Mode>(() => window.localStorage.getItem(MODE_KEY) === "advanced" ? "advanced" : "simple");
@@ -42,6 +45,29 @@ export const MooVoiceShell = () => {
     useEffect(() => {
         window.localStorage.setItem(MODE_KEY, mode);
     }, [mode]);
+
+    useEffect(() => {
+        let active = true;
+        const probeEngine = async () => {
+            try {
+                const response = await fetch("/info", { cache: "no-store" });
+                const contentType = response.headers.get("content-type") || "";
+                if (!response.ok || !contentType.includes("application/json")) throw new Error("No engine response");
+                const info = await response.json();
+                if (active) setEngineOnline(Boolean(info && (info.modelSlots || info.voiceChangerParams)));
+            } catch {
+                if (active) setEngineOnline(false);
+            } finally {
+                if (active) setEngineCheckComplete(true);
+            }
+        };
+        probeEngine();
+        const timer = window.setInterval(probeEngine, 3000);
+        return () => {
+            active = false;
+            window.clearInterval(timer);
+        };
+    }, []);
 
     useEffect(() => {
         loadDevices();
@@ -142,6 +168,17 @@ export const MooVoiceShell = () => {
                     <div><p className="moo-eyebrow">REAL-TIME VOICE TRANSFORMATION</p><h1>Good to see you.</h1><p className="moo-subtitle">Choose a voice, check your audio, and start converting.</p></div>
                     <div className="moo-mode-switch" role="group" aria-label="Interface mode"><button className={mode === "simple" ? "active" : ""} onClick={() => setMode("simple")}>Simple</button><button className={mode === "advanced" ? "active" : ""} onClick={() => setMode("advanced")}>Advanced</button></div>
                 </header>
+
+                {!engineConnected && engineCheckComplete && (
+                    <section className="moo-engine-setup">
+                        <div className="moo-engine-setup-icon">!</div>
+                        <div>
+                            <strong>Conversion engine is not running</strong>
+                            <span>The browser preview is working, but voice models, CUDA, and live conversion require the MooVoice server.</span>
+                        </div>
+                        <div className="moo-engine-steps"><b>1</b><span>Install engine</span><b>2</b><span>Launch server</span><b>3</b><span>MooVoice reconnects automatically</span></div>
+                    </section>
+                )}
 
                 <section className="moo-status-card">
                     <div className="moo-orb" aria-label="Moo Orb is idle"><div className="moo-ear left" /><div className="moo-ear right" /><div className="moo-eye left" /><div className="moo-eye right" /><div className="moo-muzzle"><b /><b /><b /><b /><b /></div></div>
