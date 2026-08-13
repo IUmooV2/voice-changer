@@ -763,7 +763,7 @@ export const MooVoiceShell = () => {
                                 {selectedModelMetadata.artwork && <button onClick={() => updateRvcMetadata(selectedModel, { artwork: "" })}>Remove</button>}
                             </div>
                             <div className="moo-model-quality">
-                                <span><strong>{selectedModel.isONNX || /\.onnx$/i.test(selectedModel.modelFile) ? "ONNX" : "PTH"}</strong><small>Model format</small></span>
+                                <span><strong>{/onnx/i.test(selectedModel.modelType || "") || /\.onnx$/i.test(selectedModel.modelFile) ? "ONNX" : "PTH"}</strong><small>Model format</small></span>
                                 <span className={selectedModel.indexFile ? "good" : "warning"}><strong>{selectedModel.indexFile ? "Index ready" : "No index"}</strong><small>{selectedModel.indexFile ? "Similarity support" : "Import one for more detail"}</small></span>
                                 <span><strong>{selectedModel.samplingRate > 0 ? `${Math.round(selectedModel.samplingRate / 1000)} kHz` : "Unknown"}</strong><small>Training rate</small></span>
                                 <span className={selectedModel.deprecated ? "warning" : "good"}><strong>{selectedModel.deprecated ? "Legacy" : "Compatible"}</strong><small>Engine status</small></span>
