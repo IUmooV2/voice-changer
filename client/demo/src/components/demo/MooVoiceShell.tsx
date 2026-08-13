@@ -428,10 +428,13 @@ export const MooVoiceShell = () => {
         changes: { tran?: number; indexRatio?: number; protect?: number },
         profile: VoiceProfile | "custom" = "custom"
     ) => {
+        const savedPreference = selectedModel?.voiceChangerType === "RVC"
+            ? rvcPreferences[rvcPreferenceKey(selectedModel)]
+            : undefined;
         const nextSettings = {
-            tran: changes.tran ?? Number(server.tran || 0),
-            indexRatio: changes.indexRatio ?? Number(server.indexRatio || 0),
-            protect: changes.protect ?? Number(server.protect ?? 0.33),
+            tran: changes.tran ?? savedPreference?.tran ?? Number(server.tran || 0),
+            indexRatio: changes.indexRatio ?? savedPreference?.indexRatio ?? Number(server.indexRatio || 0),
+            protect: changes.protect ?? savedPreference?.protect ?? Number(server.protect ?? 0.33),
         };
         await appState.serverSetting.updateServerSettings({ ...server, ...nextSettings });
         if (selectedModel?.voiceChangerType === "RVC") {
@@ -466,6 +469,11 @@ export const MooVoiceShell = () => {
         ? undefined
         : selectedRvcPreference?.profile || savedNumericVoiceProfile || numericVoiceProfile;
     const activeProfileSettings = activeVoiceProfile ? VOICE_PROFILES[activeVoiceProfile] : null;
+    const displayedTransformation = activeProfileSettings || {
+        tran: Number(server.tran || 0),
+        indexRatio: Number(server.indexRatio || 0),
+        protect: Number(server.protect ?? 0.33),
+    };
 
     const selectModel = async (slotIndex: typeof server.modelSlotIndex) => {
         const targetModel = modelSlots.find((slot) => String(slot.slotIndex) === String(slotIndex))
@@ -697,22 +705,22 @@ export const MooVoiceShell = () => {
                         </div>
                         <div className={activeVoiceProfile ? "moo-profile-selection active" : "moo-profile-selection"}>
                             <div><span>{activeVoiceProfile ? "ACTIVE PROFILE" : "CUSTOM SETTINGS"}</span><strong>{activeProfileSettings?.label || "Custom tuning"}</strong></div>
-                            <small>Pitch {Number(server.tran || 0) > 0 ? "+" : ""}{Number(server.tran || 0)} · Similarity {Math.round(Number(server.indexRatio || 0) * 100)}% · Detail {Math.round(Number(server.protect ?? 0.33) * 100)}% · Remembered for this model</small>
+                            <small>Pitch {displayedTransformation.tran > 0 ? "+" : ""}{displayedTransformation.tran} · Similarity {Math.round(displayedTransformation.indexRatio * 100)}% · Detail {Math.round(displayedTransformation.protect * 100)}% · Remembered for this model</small>
                         </div>
                         {mode === "advanced" && <div className="moo-transform-grid">
                             <label className="moo-slider">
-                                <div><span>Pitch shift</span><strong>{server.tran > 0 ? "+" : ""}{server.tran || 0} semitones</strong></div>
-                                <input type="range" min="-12" max="12" step="1" value={server.tran || 0} onChange={(event) => updateTransformation({ tran: Number(event.target.value) })} />
+                                <div><span>Pitch shift</span><strong>{displayedTransformation.tran > 0 ? "+" : ""}{displayedTransformation.tran} semitones</strong></div>
+                                <input type="range" min="-12" max="12" step="1" value={displayedTransformation.tran} onChange={(event) => updateTransformation({ tran: Number(event.target.value) })} />
                                 <small>Lower voice</small><small>Higher voice</small>
                             </label>
                             <label className="moo-slider">
-                                <div><span>Model similarity</span><strong>{Math.round((server.indexRatio || 0) * 100)}%</strong></div>
-                                <input type="range" min="0" max="1" step="0.05" value={server.indexRatio || 0} onChange={(event) => updateTransformation({ indexRatio: Number(event.target.value) })} />
+                                <div><span>Model similarity</span><strong>{Math.round(displayedTransformation.indexRatio * 100)}%</strong></div>
+                                <input type="range" min="0" max="1" step="0.05" value={displayedTransformation.indexRatio} onChange={(event) => updateTransformation({ indexRatio: Number(event.target.value) })} />
                                 <small>Natural features</small><small>More model identity</small>
                             </label>
                             <label className="moo-slider">
-                                <div><span>Detail protection</span><strong>{Math.round((server.protect ?? 0.33) * 100)}%</strong></div>
-                                <input type="range" min="0" max="0.5" step="0.01" value={server.protect ?? 0.33} onChange={(event) => updateTransformation({ protect: Number(event.target.value) })} />
+                                <div><span>Detail protection</span><strong>{Math.round(displayedTransformation.protect * 100)}%</strong></div>
+                                <input type="range" min="0" max="0.5" step="0.01" value={displayedTransformation.protect} onChange={(event) => updateTransformation({ protect: Number(event.target.value) })} />
                                 <small>More transformation</small><small>Clearer consonants</small>
                             </label>
                         </div>}
