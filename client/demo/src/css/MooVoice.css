@@ -912,9 +912,9 @@ body { margin: 0; background: var(--moo-bg); color: var(--moo-text); font-family
 
 .moo-audition-clips article {
     display: grid;
-    grid-template-columns: minmax(120px, 0.45fr) minmax(220px, 1fr) auto;
+    grid-template-columns: minmax(150px, 0.55fr) minmax(220px, 1fr) auto auto;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
     padding: 11px 12px;
     border: 1px solid var(--moo-border);
     border-radius: 12px;
@@ -944,6 +944,30 @@ body { margin: 0; background: var(--moo-bg); color: var(--moo-text); font-family
     height: 34px;
 }
 
+.moo-audition-identity small {
+    color: var(--moo-lilac);
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+}
+
+.moo-audition-clips article > a {
+    padding: 8px 10px;
+    border: 1px solid rgba(190, 152, 255, 0.3);
+    border-radius: 9px;
+    color: var(--moo-lilac);
+    background: rgba(156, 103, 255, 0.08);
+    font-size: 9px;
+    font-weight: 800;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.moo-audition-clips article > a:hover {
+    border-color: var(--moo-lilac);
+    background: rgba(156, 103, 255, 0.14);
+}
+
 .moo-audition-clips article > button {
     width: 32px;
     height: 32px;
@@ -968,5 +992,9 @@ body { margin: 0; background: var(--moo-bg); color: var(--moo-text); font-family
     .moo-audition-clips audio {
         grid-column: 1 / -1;
         grid-row: 2;
+    }
+
+    .moo-audition-clips article > a {
+        justify-self: start;
     }
 }
