@@ -552,6 +552,28 @@ export const MooVoiceShell = () => {
     const selectedModelMetadata: RvcMetadata = selectedModel?.voiceChangerType === "RVC"
         ? rvcMetadata[rvcPreferenceKey(selectedModel)] || {}
         : {};
+    const selectedModelHasIndex = Boolean(selectedModel?.indexFile);
+    const selectedModelIsLegacy = Boolean(selectedModel?.deprecated);
+    const selectedModelSampleRate = Number(selectedModel?.samplingRate || 0);
+    const selectedModelFormatKnown = Boolean(selectedModel && (/onnx/i.test(selectedModel.modelType || "") || /\.(onnx|pth)$/i.test(selectedModel.modelFile || "")));
+    const selectedModelUsesGpu = server.gpu !== -1;
+    const modelReadinessScore = selectedModel?.voiceChangerType === "RVC"
+        ? Math.min(100,
+            25
+            + (selectedModelHasIndex ? 30 : 0)
+            + (!selectedModelIsLegacy ? 20 : 0)
+            + ([40000, 48000].includes(selectedModelSampleRate) ? 10 : selectedModelSampleRate > 0 ? 5 : 0)
+            + (selectedModelFormatKnown ? 5 : 0)
+            + (selectedModelUsesGpu ? 10 : 0))
+        : 0;
+    const modelReadinessLabel = modelReadinessScore >= 85 ? "Excellent" : modelReadinessScore >= 70 ? "Ready" : modelReadinessScore >= 50 ? "Usable" : "Needs attention";
+    const recommendedVoiceProfile: VoiceProfile = selectedModelHasIndex ? "full" : "natural";
+    const modelReadinessNotes = selectedModel?.voiceChangerType === "RVC" ? [
+        selectedModelHasIndex ? "Matching feature index is available for stronger identity." : "No feature index is loaded, so similarity and fine detail may be limited.",
+        selectedModelIsLegacy ? "This model uses a legacy engine format." : "The model is compatible with the current engine.",
+        selectedModelSampleRate > 0 ? `Training rate detected at ${Math.round(selectedModelSampleRate / 1000)} kHz.` : "Training rate was not reported by the model.",
+        selectedModelUsesGpu ? `Conversion is assigned to ${computeLabel}.` : "Conversion is using the CPU; selecting the NVIDIA GPU should improve responsiveness.",
+    ] : [];
     const favoriteModelCount = availableModels.filter((slot) => slot.voiceChangerType === "RVC" && rvcMetadata[rvcPreferenceKey(slot)]?.favorite).length;
     const visibleModels = availableModels
         .filter((slot) => !modelFavoritesOnly || (slot.voiceChangerType === "RVC" && rvcMetadata[rvcPreferenceKey(slot)]?.favorite))
@@ -598,6 +620,18 @@ export const MooVoiceShell = () => {
             updateRvcMetadata(selectedModel, { artwork: canvas.toDataURL("image/jpeg", 0.82) });
         } finally {
             URL.revokeObjectURL(sourceUrl);
+        }
+    };
+
+    const optimizeSelectedModel = async () => {
+        if (!selectedModel || selectedModel.voiceChangerType !== "RVC") return;
+        setProfileApplying("Optimizing voice…");
+        try {
+            await applyVoiceProfile(recommendedVoiceProfile);
+            await applyPreset("balanced");
+            setAudioMessage(`Recommended ${VOICE_PROFILES[recommendedVoiceProfile].label} voice settings and Balanced performance are active.`);
+        } finally {
+            setProfileApplying("");
         }
     };
 
@@ -768,6 +802,16 @@ export const MooVoiceShell = () => {
                                 <span><strong>{selectedModel.samplingRate > 0 ? `${Math.round(selectedModel.samplingRate / 1000)} kHz` : "Unknown"}</strong><small>Training rate</small></span>
                                 <span className={selectedModel.deprecated ? "warning" : "good"}><strong>{selectedModel.deprecated ? "Legacy" : "Compatible"}</strong><small>Engine status</small></span>
                             </div>
+                            <section className="moo-model-readiness" aria-label="Model readiness">
+                                <div className="moo-readiness-summary">
+                                    <div className={`moo-readiness-score ${modelReadinessLabel.toLocaleLowerCase().replace(" ", "-")}`}><strong>{modelReadinessScore}</strong><span>/ 100</span></div>
+                                    <div><small>MODEL READINESS</small><strong>{modelReadinessLabel}</strong><span>Recommended profile: {VOICE_PROFILES[recommendedVoiceProfile].label}</span></div>
+                                    <button onClick={optimizeSelectedModel} disabled={Boolean(profileApplying || presetBusy)}>{profileApplying ? profileApplying : "Optimize this voice"}</button>
+                                </div>
+                                <div className="moo-readiness-meter"><i style={{ width: `${modelReadinessScore}%` }} /></div>
+                                <ul>{modelReadinessNotes.map((note) => <li key={note}>{note}</li>)}</ul>
+                                {!selectedModelHasIndex && <div className="moo-readiness-action"><strong>Best next improvement</strong><span>Import the matching .index file supplied with this exact model. An unrelated index can reduce quality.</span></div>}
+                            </section>
                             <label className="wide"><span>MY NAME FOR THIS VOICE</span><input value={selectedModelMetadata.displayName || ""} onChange={(event) => updateRvcMetadata(selectedModel, { displayName: event.target.value })} placeholder={String(selectedModel.name || "Voice name")} /></label>
                             <label className="wide"><span>TAGS</span><input value={selectedModelMetadata.tags || ""} onChange={(event) => updateRvcMetadata(selectedModel, { tags: event.target.value })} placeholder="Soft, feminine, English, narrator…" /></label>
                             <label className="wide"><span>NOTES</span><textarea value={selectedModelMetadata.notes || ""} onChange={(event) => updateRvcMetadata(selectedModel, { notes: event.target.value })} placeholder="What this model sounds like and where it works best…" rows={2} /></label>
