@@ -11,6 +11,13 @@ type AudioState = "idle" | "requesting" | "ready" | "error";
 const MODE_KEY = "moovoice.ui.mode";
 const INPUT_KEY = "moovoice.audio.input";
 const OUTPUT_KEY = "moovoice.audio.output";
+const MAX_MODEL_BYTES = 2 * 1024 * 1024 * 1024;
+const MAX_INDEX_BYTES = 1024 * 1024 * 1024;
+
+const formatFileSize = (bytes: number) => {
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(bytes < 100 * 1024 * 1024 ? 1 : 0)} MB`;
+};
 
 export const MooVoiceShell = () => {
     const appState = useAppState();
@@ -281,6 +288,14 @@ export const MooVoiceShell = () => {
             setImportError("Choose an RVC .pth or .onnx model file.");
             return;
         }
+        if (file.size === 0) {
+            setImportError("This model file is empty.");
+            return;
+        }
+        if (file.size > MAX_MODEL_BYTES) {
+            setImportError("This model is larger than the 2 GB import limit.");
+            return;
+        }
         setImportModel(file);
         if (!importName) setImportName(file.name.replace(/\.(pth|onnx)$/i, ""));
         setImportError("");
@@ -290,6 +305,14 @@ export const MooVoiceShell = () => {
         if (!file) return;
         if (!/\.(index|bin)$/i.test(file.name)) {
             setImportError("The optional index must use .index or .bin.");
+            return;
+        }
+        if (file.size === 0) {
+            setImportError("This feature index is empty.");
+            return;
+        }
+        if (file.size > MAX_INDEX_BYTES) {
+            setImportError("This feature index is larger than the 1 GB import limit.");
             return;
         }
         setImportIndex(file);
@@ -408,7 +431,7 @@ export const MooVoiceShell = () => {
                 {modelReady && selectedModel?.voiceChangerType === "RVC" && (
                     <section className="moo-transform" aria-label="Voice transformation controls">
                         <div className="moo-section-title">
-                            <div><h3>Voice transformation</h3><p>Shape how strongly the selected model changes your voice.</p></div>
+                            <div><h3>Voice transformation</h3><p>Tune pitch, model similarity, and speech clarity.</p></div>
                             <span>RVC · {selectedModel.name}</span>
                         </div>
                         <div className="moo-profile-row">
@@ -424,9 +447,9 @@ export const MooVoiceShell = () => {
                                 <small>Lower voice</small><small>Higher voice</small>
                             </label>
                             <label className="moo-slider">
-                                <div><span>Voice strength</span><strong>{Math.round((server.indexRatio || 0) * 100)}%</strong></div>
+                                <div><span>Model similarity</span><strong>{Math.round((server.indexRatio || 0) * 100)}%</strong></div>
                                 <input type="range" min="0" max="1" step="0.05" value={server.indexRatio || 0} onChange={(event) => updateTransformation({ indexRatio: Number(event.target.value) })} />
-                                <small>Subtle</small><small>Full character</small>
+                                <small>Natural features</small><small>More model identity</small>
                             </label>
                             <label className="moo-slider">
                                 <div><span>Detail protection</span><strong>{Math.round((server.protect ?? 0.33) * 100)}%</strong></div>
@@ -442,7 +465,7 @@ export const MooVoiceShell = () => {
                     <div className="moo-preset-grid">{[["low-latency","Low Latency","Fastest response for live chat","Discord · Game chat"],["balanced","Balanced","The best starting point","Everyday use"],["studio","Studio","Prioritize sound quality","Recording · Production"]].map(([id,title,copy,meta]) => <button key={id} className={preset === id ? "moo-preset active" : "moo-preset"} onClick={() => applyPreset(id as Preset)} disabled={presetBusy}><span className="moo-radio" /><strong>{title}</strong><small>{copy}</small><em>{meta}</em></button>)}</div>
                 </section>
 
-                {mode === "advanced" && <section className="moo-advanced"><div><span>Chunk size</span><strong>{appState.setting.workletNodeSetting.inputChunkNum}</strong></div><div><span>Pitch detector</span><strong>{server.f0Detector}</strong></div><div><span>Index ratio</span><strong>{server.indexRatio}</strong></div><div><span>Protect</span><strong>{server.protect}</strong></div><div><span>Compute device</span><strong>{computeLabel}</strong></div><div><span>Extra buffer</span><strong>{server.extraConvertSize}</strong></div></section>}
+                {mode === "advanced" && <section className="moo-advanced"><div><span>Chunk size</span><strong>{appState.setting.workletNodeSetting.inputChunkNum}</strong></div><div><span>Pitch detector</span><strong>{server.f0Detector}</strong></div><div><span>Feature index influence</span><strong>{server.indexRatio}</strong></div><div><span>Protect</span><strong>{server.protect}</strong></div><div><span>Compute device</span><strong>{computeLabel}</strong></div><div><span>Extra buffer</span><strong>{server.extraConvertSize}</strong></div></section>}
 
                 <section className="moo-legacy-gate"><div><strong>Engine compatibility controls</strong><span>Use the original interface while MooVoice controls are being connected.</span></div><button onClick={() => setLegacyVisible((value) => !value)}>{legacyVisible ? "Hide legacy interface" : "Open legacy interface"}</button></section>
                 {legacyVisible && <div className="moo-legacy"><ModelSlotControl /></div>}
@@ -457,14 +480,14 @@ export const MooVoiceShell = () => {
                             <div className="moo-file-grid">
                                 <label className={importModel ? "moo-file-drop selected" : "moo-file-drop"}>
                                     <input type="file" accept=".pth,.onnx" onChange={(event) => chooseModelFile(event.target.files?.[0] || null)} />
-                                    <b>{importModel ? "✓" : "+"}</b><strong>RVC model</strong><span>{importModel?.name || ".pth or .onnx · required"}</span>
+                                    <b>{importModel ? "✓" : "+"}</b><strong>RVC model</strong><span>{importModel ? `${importModel.name} · ${formatFileSize(importModel.size)}` : ".pth or .onnx · required"}</span>
                                 </label>
                                 <label className={importIndex ? "moo-file-drop selected" : "moo-file-drop"}>
                                     <input type="file" accept=".index,.bin" onChange={(event) => chooseIndexFile(event.target.files?.[0] || null)} />
-                                    <b>{importIndex ? "✓" : "+"}</b><strong>Feature index</strong><span>{importIndex?.name || ".index or .bin · optional"}</span>
+                                    <b>{importIndex ? "✓" : "+"}</b><strong>Feature index</strong><span>{importIndex ? `${importIndex.name} · ${formatFileSize(importIndex.size)}` : ".index or .bin · recommended"}</span>
                                 </label>
                             </div>
-                            <div className="moo-import-note"><strong>Slot {importSlot}</strong><span>The index usually improves similarity and detail when supplied with the model.</span></div>
+                            <div className="moo-import-note"><strong>Slot {importSlot}</strong><span>Compatibility does not guarantee voice quality. Use the matching index and a well-trained, properly licensed RVC model for the best result.</span></div>
                             {importError && <div className="moo-import-error">{importError}</div>}
                             {appState.serverSetting.isUploading && <div className="moo-upload-progress"><i style={{ width: `${Math.max(2, appState.serverSetting.uploadProgress)}%` }} /><span>{appState.serverSetting.uploadProgress > 0 ? `Uploading ${appState.serverSetting.uploadProgress.toFixed(0)}%` : "Loading model into the engine…"}</span></div>}
                             <div className="moo-import-actions"><button onClick={() => setImportOpen(false)} disabled={appState.serverSetting.isUploading}>Cancel</button><button className="primary" onClick={importRvcModel} disabled={appState.serverSetting.isUploading || !importModel}>{appState.serverSetting.isUploading ? "Importing…" : "Import voice"}</button></div>
