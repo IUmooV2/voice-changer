@@ -95,3 +95,10 @@ body { margin: 0; background: var(--moo-bg); color: var(--moo-text); font-family
 @media (max-width: 620px) {
     .moo-topbar,.moo-status-card,.moo-legacy-gate { align-items:stretch; flex-direction:column; }.moo-mode-switch { align-self:flex-start; }.moo-preset-grid,.moo-advanced { grid-template-columns:1fr; }.moo-status-card .moo-primary-button { width:100%; }
 }
+
+.moo-primary-button:disabled { cursor: not-allowed; filter: grayscale(.55); opacity: .48; transform: none; }
+.moo-empty { cursor: pointer; }
+.moo-audio-message { margin-top: 10px; min-height: 14px; color: var(--moo-muted); font-size: 10px; }
+.moo-audio-message.requesting { color: var(--moo-lilac-bright); }
+.moo-audio-message.ready { color: var(--moo-success); }
+.moo-audio-message.error { color: #ef8e98; }
