@@ -8,6 +8,7 @@ type Mode = "simple" | "advanced";
 type Preset = "low-latency" | "balanced" | "studio";
 type VoiceProfile = "natural" | "full" | "bright" | "deep";
 type RvcPreference = { tran: number; indexRatio: number; protect: number; profile?: VoiceProfile | "custom" };
+type PendingProfileRestore = { slotIndex: string | number; settings: RvcPreference; label: string };
 type AudioState = "idle" | "requesting" | "ready" | "error";
 type AuditionClip = { id: number; sampleNumber: number; label: string; detail: string; filename: string; createdAt: string; url: string };
 
@@ -86,6 +87,7 @@ export const MooVoiceShell = () => {
     const [preset, setPreset] = useState<Preset>("balanced");
     const [presetBusy, setPresetBusy] = useState(false);
     const [profileApplying, setProfileApplying] = useState("");
+    const [pendingProfileRestore, setPendingProfileRestore] = useState<PendingProfileRestore | null>(null);
     const [rvcPreferences, setRvcPreferences] = useState<Record<string, RvcPreference>>(
         () => readJsonSetting<Record<string, RvcPreference>>(RVC_PREFERENCES_KEY, {})
     );
@@ -181,6 +183,30 @@ export const MooVoiceShell = () => {
     useEffect(() => {
         window.localStorage.setItem(RVC_PREFERENCES_KEY, JSON.stringify(rvcPreferences));
     }, [rvcPreferences]);
+
+    useEffect(() => {
+        if (!pendingProfileRestore || String(server.modelSlotIndex) !== String(pendingProfileRestore.slotIndex)) return;
+        let active = true;
+        const restoreProfile = async () => {
+            const { profile, ...settings } = pendingProfileRestore.settings;
+            try {
+                // This effect runs after the model-change response has produced a fresh
+                // server snapshot, so updateServerSettings will not resend modelSlotIndex.
+                await appState.serverSetting.updateServerSettings({ ...server, ...settings });
+                await appState.serverSetting.reloadServerInfo();
+                await appState.trancateBuffer();
+            } finally {
+                if (active) {
+                    setPendingProfileRestore(null);
+                    setProfileApplying("");
+                }
+            }
+        };
+        restoreProfile();
+        return () => {
+            active = false;
+        };
+    }, [server.modelSlotIndex, pendingProfileRestore]);
 
     useEffect(() => {
         window.localStorage.setItem(JVS_ALIASES_KEY, JSON.stringify(jvsAliases));
@@ -499,43 +525,16 @@ export const MooVoiceShell = () => {
             setRvcPreferences((current) => ({ ...current, [key]: naturalDefaults }));
         }
 
-        // Wait for the server to confirm the slot change before restoring its tuning.
-        // A fixed delay can race slower model activation and silently lose the profile.
-        setProfileApplying(targetModel?.voiceChangerType === "RVC"
-            ? `Applying ${VOICE_PROFILES[restoredPreference.profile as VoiceProfile]?.label || "custom tuning"}…`
-            : "Switching voice…");
-        try {
-            await appState.serverSetting.updateServerSettings({
-                ...server,
-                modelSlotIndex: slotIndex,
-            });
-            if (targetModel?.voiceChangerType === "RVC") {
-                for (let attempt = 0; attempt < 15; attempt += 1) {
-                    await new Promise<void>((resolve) => window.setTimeout(resolve, 200));
-                    try {
-                        const response = await fetch("/info", { cache: "no-store" });
-                        const info = await response.json();
-                        const activeSlot = info?.voiceChangerParams?.modelSlotIndex ?? info?.modelSlotIndex;
-                        if (String(activeSlot) === String(slotIndex)) break;
-                    } catch {
-                        // The next poll will retry while the engine completes activation.
-                    }
-                }
-                await appState.serverSetting.updateServerSettings({
-                    ...server,
-                    modelSlotIndex: slotIndex,
-                    ...restoredSettings,
-                });
-                await new Promise<void>((resolve) => window.setTimeout(resolve, 350));
-                await appState.serverSetting.updateServerSettings({
-                    ...server,
-                    modelSlotIndex: slotIndex,
-                    ...restoredSettings,
-                });
-                await appState.serverSetting.reloadServerInfo();
-                await appState.trancateBuffer();
-            }
-        } finally {
+        const restoreLabel = VOICE_PROFILES[restoredPreference.profile as VoiceProfile]?.label || "custom tuning";
+        setProfileApplying(targetModel?.voiceChangerType === "RVC" ? `Applying ${restoreLabel}…` : "Switching voice…");
+        if (targetModel?.voiceChangerType === "RVC") {
+            setPendingProfileRestore({ slotIndex, settings: restoredPreference, label: restoreLabel });
+        }
+        await appState.serverSetting.updateServerSettings({
+            ...server,
+            modelSlotIndex: slotIndex,
+        });
+        if (targetModel?.voiceChangerType !== "RVC") {
             setProfileApplying("");
         }
     };
