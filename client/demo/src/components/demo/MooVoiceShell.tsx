@@ -455,10 +455,13 @@ export const MooVoiceShell = () => {
         const savedSettings = targetModel?.voiceChangerType === "RVC"
             ? rvcPreferences[rvcPreferenceKey(targetModel)]
             : undefined;
+        const naturalDefaults = targetModel?.voiceChangerType === "RVC"
+            ? { tran: VOICE_PROFILES.natural.tran, indexRatio: VOICE_PROFILES.natural.indexRatio, protect: VOICE_PROFILES.natural.protect }
+            : {};
         await appState.serverSetting.updateServerSettings({
             ...server,
             modelSlotIndex: slotIndex,
-            ...(savedSettings || {}),
+            ...(savedSettings || naturalDefaults),
         });
     };
 
