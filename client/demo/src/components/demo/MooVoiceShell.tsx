@@ -458,11 +458,23 @@ export const MooVoiceShell = () => {
         const naturalDefaults = targetModel?.voiceChangerType === "RVC"
             ? { tran: VOICE_PROFILES.natural.tran, indexRatio: VOICE_PROFILES.natural.indexRatio, protect: VOICE_PROFILES.natural.protect }
             : {};
+        const restoredSettings = savedSettings || naturalDefaults;
+
+        // Model activation can reset conversion parameters, so restore tuning only after
+        // the engine has completed the slot change.
         await appState.serverSetting.updateServerSettings({
             ...server,
             modelSlotIndex: slotIndex,
-            ...(savedSettings || naturalDefaults),
         });
+        if (targetModel?.voiceChangerType === "RVC") {
+            await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+            await appState.serverSetting.updateServerSettings({
+                ...server,
+                modelSlotIndex: slotIndex,
+                ...restoredSettings,
+            });
+            await appState.trancateBuffer();
+        }
     };
 
     const availableModels = modelSlots.filter((slot) => Boolean(slot.modelFile));
