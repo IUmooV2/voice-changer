@@ -259,13 +259,25 @@ export const MooVoiceShell = () => {
         setOutputId(value);
         guiState.setAudioOutputForGUI(value || "none");
         const element = document.getElementById("moovoice-audio-output") as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
-        if (element?.setSinkId) {
-            try {
-                await element.setSinkId(value);
-            } catch (error) {
-                setAudioState("error");
-                setAudioMessage(error instanceof Error ? error.message : "The browser could not use this output.");
+        if (!element) return;
+        try {
+            const wasConverting = guiState.isConverting;
+            appState.setAudioOutputElementId("moovoice-audio-output");
+            if (!element.setSinkId && value) {
+                throw new Error("This browser cannot route MooVoice to a specific output device.");
             }
+            if (element.setSinkId) await element.setSinkId(value || "");
+            element.volume = 1;
+            element.muted = false;
+            await element.play();
+            setAudioState("ready");
+            const routeName = outputs.find((device) => device.deviceId === value)?.label || "system default output";
+            setAudioMessage(wasConverting
+                ? `Converted voice routed to ${routeName}.`
+                : `Output ready: ${routeName}. Start converting when ready.`);
+        } catch (error) {
+            setAudioState("error");
+            setAudioMessage(error instanceof Error ? error.message : "The browser could not use this output.");
         }
     };
 
