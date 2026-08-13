@@ -57,6 +57,7 @@ export const MooVoiceShell = () => {
     const [importIndex, setImportIndex] = useState<File | null>(null);
     const [importSlot, setImportSlot] = useState(0);
     const [importError, setImportError] = useState("");
+    const [importReplacing, setImportReplacing] = useState(false);
     const [inputs, setInputs] = useState<MediaDeviceInfo[]>([]);
     const [outputs, setOutputs] = useState<MediaDeviceInfo[]>([]);
     const [inputId, setInputId] = useState(() => window.localStorage.getItem(INPUT_KEY) || "");
@@ -337,10 +338,12 @@ export const MooVoiceShell = () => {
         return `${slot.name || ""} ${slot.voiceChangerType || ""}`.toLocaleLowerCase().includes(query);
     });
 
-    const openImporter = () => {
+    const openImporter = (replaceSlot?: number) => {
+        const replacing = typeof replaceSlot === "number";
         const openSlot = modelSlots.findIndex((slot) => !slot.modelFile);
-        setImportSlot(openSlot >= 0 ? openSlot : modelSlots.length);
-        setImportName("");
+        setImportReplacing(replacing);
+        setImportSlot(replacing ? replaceSlot : openSlot >= 0 ? openSlot : modelSlots.length);
+        setImportName(replacing ? String(selectedModel?.name || "") : "");
         setImportModel(null);
         setImportIndex(null);
         setImportError("");
@@ -470,7 +473,7 @@ export const MooVoiceShell = () => {
 
                 <section className="moo-grid">
                     <article className="moo-panel" id="moo-models">
-                        <div className="moo-panel-heading"><div><span className="moo-icon">◉</span><div><h3>Voice model</h3><p>Choose how you want to sound</p></div></div><button onClick={openImporter}>Import model</button></div>
+                        <div className="moo-panel-heading"><div><span className="moo-icon">◉</span><div><h3>Voice model</h3><p>Choose how you want to sound</p></div></div><div className="moo-panel-actions">{mode === "advanced" && selectedModel?.voiceChangerType === "RVC" && typeof selectedModel.slotIndex === "number" && <button onClick={() => openImporter(selectedModel.slotIndex)}>Replace selected</button>}<button onClick={() => openImporter()}>Import model</button></div></div>
                         {availableModels.length > 4 && <div className="moo-library-search"><span>⌕</span><input value={modelQuery} onChange={(event) => setModelQuery(event.target.value)} placeholder="Search voice models…" />{modelQuery && <button onClick={() => setModelQuery("")} aria-label="Clear model search">×</button>}</div>}
                         {availableModels.length > 0 ? (
                             visibleModels.length > 0 ? <div className="moo-model-list">
@@ -592,7 +595,7 @@ export const MooVoiceShell = () => {
                     <div className="moo-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget && !appState.serverSetting.isUploading) setImportOpen(false); }}>
                         <section className="moo-import-modal" role="dialog" aria-modal="true" aria-labelledby="moo-import-title">
                             <div className="moo-import-header">
-                                <div><span>VOICE LIBRARY</span><h2 id="moo-import-title">Import an RVC model</h2><p>Add a model you own or have permission to use.</p></div>
+                                <div><span>VOICE LIBRARY</span><h2 id="moo-import-title">{importReplacing ? "Replace selected RVC model" : "Import an RVC model"}</h2><p>{importReplacing ? `Update slot ${importSlot} while keeping it in the same library position.` : "Add a model you own or have permission to use."}</p></div>
                                 <button onClick={() => setImportOpen(false)} disabled={appState.serverSetting.isUploading} aria-label="Close">×</button>
                             </div>
                             <label className="moo-import-name"><span>VOICE NAME</span><input value={importName} onChange={(event) => setImportName(event.target.value)} placeholder="My voice model" /></label>
@@ -606,10 +609,10 @@ export const MooVoiceShell = () => {
                                     <b>{importIndex ? "✓" : "+"}</b><strong>Feature index</strong><span>{importIndex ? `${importIndex.name} · ${formatFileSize(importIndex.size)}` : ".index or .bin · recommended"}</span>
                                 </label>
                             </div>
-                            <div className="moo-import-note"><strong>Slot {importSlot}</strong><span>Compatibility does not guarantee voice quality. Use the matching index and a well-trained, properly licensed RVC model for the best result.</span></div>
+                            <div className={importReplacing ? "moo-import-note warning" : "moo-import-note"}><strong>Slot {importSlot}</strong><span>{importReplacing ? "This overwrites the model currently stored in this slot. The previous model files will no longer be selected by MooVoice." : "Compatibility does not guarantee voice quality. Use the matching index and a well-trained, properly licensed RVC model for the best result."}</span></div>
                             {importError && <div className="moo-import-error">{importError}</div>}
                             {appState.serverSetting.isUploading && <div className="moo-upload-progress"><i style={{ width: `${Math.max(2, appState.serverSetting.uploadProgress)}%` }} /><span>{appState.serverSetting.uploadProgress > 0 ? `Uploading ${appState.serverSetting.uploadProgress.toFixed(0)}%` : "Loading model into the engine…"}</span></div>}
-                            <div className="moo-import-actions"><button onClick={() => setImportOpen(false)} disabled={appState.serverSetting.isUploading}>Cancel</button><button className="primary" onClick={importRvcModel} disabled={appState.serverSetting.isUploading || !importModel}>{appState.serverSetting.isUploading ? "Importing…" : "Import voice"}</button></div>
+                            <div className="moo-import-actions"><button onClick={() => setImportOpen(false)} disabled={appState.serverSetting.isUploading}>Cancel</button><button className="primary" onClick={importRvcModel} disabled={appState.serverSetting.isUploading || !importModel}>{appState.serverSetting.isUploading ? (importReplacing ? "Replacing…" : "Importing…") : (importReplacing ? "Replace model" : "Import voice")}</button></div>
                         </section>
                     </div>
                 )}
