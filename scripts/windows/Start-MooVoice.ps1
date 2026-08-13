@@ -104,11 +104,12 @@ function Start-Engine([string]$Directory) {
     throw "No supported engine launcher was found in $Directory."
 }
 
-Write-Step "Checking your setup..."
+Set-Content -LiteralPath $StartupLog -Value "$((Get-Date).ToString("s")) [MooVoice] Startup requested." -Encoding UTF8
+Write-Step "Checking Windows, engine, and interface dependencies..."
 
 if (-not $SkipEngine) {
     if (Test-TcpPort $EnginePort) {
-        Write-Host "[MooVoice] Conversion engine is already running." -ForegroundColor Green
+        Write-Step "Conversion engine is already running. Reusing it." Green
     } else {
         $resolvedEngineDirectory = Resolve-EngineDirectory $EngineDirectory
         if (-not $resolvedEngineDirectory) {
@@ -130,19 +131,25 @@ if (-not $SkipInterface) {
     if (-not (Test-Path (Join-Path $DemoDirectory "package.json"))) {
         throw "MooVoice frontend was not found at $DemoDirectory."
     }
-    if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
-        throw "npm is not available in PATH. Install Node.js and reopen PowerShell."
+    if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+        throw "Node.js is not available in PATH. Install Node.js LTS and reopen PowerShell."
     }
+    if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
+        throw "npm is not available in PATH. Repair Node.js and reopen PowerShell."
+    }
+    Write-Step "Node $(& node --version) and npm $(& npm --version) detected." Green
     if (Test-TcpPort $InterfacePort) {
-        Write-Host "[MooVoice] Interface is already running." -ForegroundColor Green
+        Write-Step "Interface is already running. Reusing it." Green
     } else {
         Write-Step "Starting the MooVoice interface..."
         $engineProtocol = if ((Test-Path (Join-Path $resolvedEngineDirectory "start_https.bat")) -or (-not $resolvedEngineDirectory)) { "https" } else { "http" }
         $env:MOOVOICE_ENGINE_URL = "${engineProtocol}://127.0.0.1:$EnginePort"
         $escapedDemoDirectory = $DemoDirectory.Replace("'", "''")
-        $command = "Set-Location -LiteralPath '$escapedDemoDirectory'; npm start"
-        Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $command -WorkingDirectory $DemoDirectory -WindowStyle Minimized | Out-Null
-        Wait-ForPort "MooVoice interface" $InterfacePort 120
+        $escapedLogDirectory = $LogDirectory.Replace("'", "''")
+        $command = "$host.UI.RawUI.WindowTitle='MooVoice Interface'; Set-Location -LiteralPath '$escapedDemoDirectory'; npm start 2>&1 | Tee-Object -FilePath (Join-Path '$escapedLogDirectory' 'interface.log')"
+        $windowStyle = if ($ShowServiceWindows) { "Normal" } else { "Minimized" }
+        $interfaceProcess = Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $command -WorkingDirectory $DemoDirectory -WindowStyle $windowStyle -PassThru
+        Wait-ForPort "MooVoice interface" $InterfacePort 120 $interfaceProcess
     }
 }
 
@@ -155,3 +162,5 @@ Write-Host ""
 Write-Host "MooVoice is ready." -ForegroundColor Green
 Write-Host "Interface: https://localhost:$InterfacePort"
 Write-Host "Engine port: $EnginePort"
+Write-Host "Logs: $LogDirectory"
+Write-Host "Tip: add -ShowServiceWindows when troubleshooting." -ForegroundColor DarkGray
