@@ -606,6 +606,15 @@ export const MooVoiceShell = () => {
     const activeSetupOptimized = activeVoiceProfile === recommendedVoiceProfile
         && preset === "balanced"
         && selectedModelUsesGpu;
+    const personalSetupActive = Boolean(activeVoiceProfile)
+        && activeVoiceProfile !== recommendedVoiceProfile
+        && selectedModelUsesGpu;
+    const activeSetupLabel = activeSetupOptimized ? "Recommended setup active" : personalSetupActive ? "Personal tuning active" : "Setup needs attention";
+    const activeSetupDetail = activeSetupOptimized
+        ? `${VOICE_PROFILES[recommendedVoiceProfile].label} profile · Balanced performance · GPU active`
+        : personalSetupActive
+            ? `${VOICE_PROFILES[activeVoiceProfile as VoiceProfile].label} profile · Remembered for this model · GPU active`
+            : `Recommended: ${VOICE_PROFILES[recommendedVoiceProfile].label} profile · Balanced performance · GPU`;
     const modelReadinessNotes = selectedModel?.voiceChangerType === "RVC" ? [
         selectedModelHasIndex ? "Matching feature index is available for stronger identity." : "No feature index is loaded, so similarity and fine detail may be limited.",
         selectedModelIsLegacy ? "This model uses a legacy engine format." : "The model is compatible with the current engine.",
@@ -858,11 +867,11 @@ export const MooVoiceShell = () => {
                                     <button className={activeSetupOptimized ? "optimized" : ""} onClick={optimizeSelectedModel} disabled={Boolean(profileApplying || presetBusy)}>{profileApplying ? profileApplying : activeSetupOptimized ? "✓ Setup optimized" : "Optimize this voice"}</button>
                                 </div>
                                 <div className="moo-readiness-meter"><i style={{ width: `${modelReadinessScore}%` }} /></div>
-                                <div className={activeSetupOptimized ? "moo-setup-status optimized" : "moo-setup-status"}>
-                                    <div><small>ACTIVE SETUP</small><strong>{activeSetupOptimized ? "Optimized" : "Not optimized"}</strong></div>
-                                    <span>{activeSetupOptimized ? `${VOICE_PROFILES[recommendedVoiceProfile].label} profile · Balanced performance · GPU active` : `Recommended: ${VOICE_PROFILES[recommendedVoiceProfile].label} profile · Balanced performance · GPU`}</span>
+                                <div className={activeSetupOptimized ? "moo-setup-status optimized" : personalSetupActive ? "moo-setup-status personal" : "moo-setup-status"}>
+                                    <div><small>ACTIVE SETUP</small><strong>{activeSetupLabel}</strong></div>
+                                    <span>{activeSetupDetail}</span>
                                 </div>
-                                <p className="moo-readiness-explainer">Optimization adjusts live tuning and performance. The model-package score only changes when the model files, matching index, compatibility, or compute device changes.</p>
+                                <p className="moo-readiness-explainer">Your saved Best profile is treated as personal tuning, even when it differs from MooVoice’s automatic recommendation. The model-package score only changes when the files, compatibility, or compute device changes.</p>
                                 <ul>{modelReadinessNotes.map((note) => <li key={note}>{note}</li>)}</ul>
                                 {!selectedModelHasIndex && <div className="moo-readiness-action"><strong>Best next improvement</strong><span>Import the matching .index file supplied with this exact model. An unrelated index can reduce quality.</span></div>}
                             </section>
