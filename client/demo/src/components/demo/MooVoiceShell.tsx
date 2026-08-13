@@ -11,7 +11,7 @@ type RvcPreference = { tran: number; indexRatio: number; protect: number; profil
 type PendingProfileRestore = { slotIndex: string | number; settings: RvcPreference; label: string };
 type RvcMetadata = { displayName?: string; tags?: string; notes?: string; favorite?: boolean; artwork?: string };
 type AudioState = "idle" | "requesting" | "ready" | "error";
-type AuditionClip = { id: number; sampleNumber: number; label: string; detail: string; filename: string; createdAt: string; url: string };
+type AuditionClip = { id: number; sampleNumber: number; label: string; detail: string; filename: string; createdAt: string; url: string; modelKey?: string; profile?: VoiceProfile | "custom" };
 
 const MODE_KEY = "moovoice.ui.mode";
 const INPUT_KEY = "moovoice.audio.input";
@@ -121,7 +121,8 @@ export const MooVoiceShell = () => {
     const [auditionRecording, setAuditionRecording] = useState(false);
     const [auditionError, setAuditionError] = useState("");
     const [auditionClips, setAuditionClips] = useState<AuditionClip[]>([]);
-    const [auditionLabel, setAuditionLabel] = useState({ label: "", detail: "" });
+    const [auditionLabel, setAuditionLabel] = useState<{ label: string; detail: string; modelKey?: string; profile?: VoiceProfile | "custom" }>({ label: "", detail: "" });
+    const [bestAuditionId, setBestAuditionId] = useState<number | null>(null);
 
     const loadDevices = async () => {
         if (!navigator.mediaDevices?.enumerateDevices) return;
@@ -406,7 +407,14 @@ export const MooVoiceShell = () => {
             const speaker = jvsAliases[String(guiState.beatriceJVSSpeakerId)] || `JVS ${String(guiState.beatriceJVSSpeakerId).padStart(3, "0")}`;
             return { label: speaker, detail: JVS_RANGE_LABELS[guiState.beatriceJVSSpeakerPitch] || "Natural" };
         }
-        return { label: String(selectedModel?.name || "Voice sample"), detail: String(selectedModel?.voiceChangerType || "RVC") };
+        const metadata = selectedModel?.voiceChangerType === "RVC" ? rvcMetadata[rvcPreferenceKey(selectedModel)] || {} : {};
+        const profile = activeVoiceProfile || "custom";
+        return {
+            label: metadata.displayName?.trim() || String(selectedModel?.name || "Voice sample"),
+            detail: profile === "custom" ? "Custom tuning" : `${VOICE_PROFILES[profile].label} profile`,
+            modelKey: selectedModel?.voiceChangerType === "RVC" ? rvcPreferenceKey(selectedModel) : undefined,
+            profile,
+        };
     };
 
     const startAuditionRecording = () => {
@@ -444,6 +452,8 @@ export const MooVoiceShell = () => {
                     filename: `moovoice-sample-${String(sampleNumber).padStart(2, "0")}-${safeIdentity}.wav`,
                     createdAt: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }),
                     url,
+                    modelKey: auditionLabel.modelKey,
+                    profile: auditionLabel.profile,
                 }];
             });
         } catch {
@@ -452,10 +462,34 @@ export const MooVoiceShell = () => {
         }
     };
 
+    const chooseBestAudition = async (clip: AuditionClip) => {
+        setBestAuditionId(clip.id);
+        if (!clip.modelKey || !clip.profile || clip.profile === "custom") {
+            setAudioMessage(`Best sample marked: ${clip.label} · ${clip.detail}.`);
+            return;
+        }
+        const settings = VOICE_PROFILES[clip.profile];
+        setRvcPreferences((current) => ({
+            ...current,
+            [clip.modelKey as string]: {
+                tran: settings.tran,
+                indexRatio: settings.indexRatio,
+                protect: settings.protect,
+                profile: clip.profile,
+            },
+        }));
+        if (selectedModel?.voiceChangerType === "RVC" && rvcPreferenceKey(selectedModel) === clip.modelKey) {
+            await applyVoiceProfile(clip.profile);
+        }
+        setAudioState("ready");
+        setAudioMessage(`Preferred profile saved for ${clip.label}: ${settings.label}.`);
+    };
+
     const removeAuditionClip = (id: number) => {
         setAuditionClips((current) => {
             const target = current.find((clip) => clip.id === id);
             if (target) URL.revokeObjectURL(target.url);
+            if (bestAuditionId === id) setBestAuditionId(null);
             return current.filter((clip) => clip.id !== id);
         });
     };
@@ -463,6 +497,7 @@ export const MooVoiceShell = () => {
     const clearAuditionClips = () => {
         auditionClips.forEach((clip) => URL.revokeObjectURL(clip.url));
         setAuditionClips([]);
+        setBestAuditionId(null);
     };
 
     const updateTransformation = async (
@@ -942,7 +977,7 @@ export const MooVoiceShell = () => {
                             {auditionClips.length > 0 && <button onClick={clearAuditionClips}>Clear clips</button>}
                         </div>
                         <div className="moo-audition-capture">
-                            <div><small>TEST PHRASE</small><strong>“Hey, how’s it going? I’m testing my new voice today.”</strong><span>{auditionRecording ? "Recording converted output now…" : "Start conversion, press record, then read the phrase."}</span></div>
+                            <div><small>TEST PHRASE</small><strong>“Hey, how’s it going? I’m testing my new voice today.”</strong><span>{auditionRecording ? `Recording ${getAuditionLabel().detail} now…` : "Choose a profile, start conversion, record the phrase, then repeat with another profile."}</span></div>
                             <button className={auditionRecording ? "recording" : ""} onClick={auditionRecording ? stopAuditionRecording : startAuditionRecording}>{auditionRecording ? "■ Stop sample" : "● Record sample"}</button>
                         </div>
                         {auditionError && <div className="moo-import-error">{auditionError}</div>}
@@ -950,6 +985,7 @@ export const MooVoiceShell = () => {
                             <div className="moo-audition-identity"><small>SAMPLE {String(clip.sampleNumber).padStart(2, "0")} · {clip.createdAt}</small><strong>{clip.label}</strong><span>{clip.detail}</span></div>
                             <audio controls src={clip.url} />
                             <a href={clip.url} download={clip.filename} title={clip.filename}>↓ WAV</a>
+                            <button className={bestAuditionId === clip.id ? "moo-audition-best active" : "moo-audition-best"} onClick={() => chooseBestAudition(clip)} aria-pressed={bestAuditionId === clip.id}>{bestAuditionId === clip.id ? "★ Best" : "☆ Best"}</button>
                             <button onClick={() => removeAuditionClip(clip.id)} aria-label={`Remove sample ${clip.sampleNumber}, ${clip.label}`}>×</button>
                         </article>)}</div>}
                     </section>
