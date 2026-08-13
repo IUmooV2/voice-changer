@@ -30,7 +30,8 @@ export const MooVoiceShell = () => {
     const modelSlots = server.modelSlots || [];
     const selectedModel = modelSlots.find((slot) => String(slot.slotIndex) === String(server.modelSlotIndex))
         || (typeof server.modelSlotIndex === "number" ? modelSlots[server.modelSlotIndex] : undefined);
-    const modelReady = engineConnected && Boolean(selectedModel?.modelFile);
+    const isBeatriceJvs = selectedModel?.slotIndex === "Beatrice-JVS" || selectedModel?.voiceChangerType === "Beatrice";
+    const modelReady = engineConnected && Boolean(selectedModel && (selectedModel.modelFile || isBeatriceJvs));
     const selectedGpu = server.gpus?.find((gpu) => gpu.id === server.gpu);
     const computeLabel = server.gpu === -1 ? "CPU" : selectedGpu?.name || (engineConnected ? "GPU not selected" : "Engine offline");
     const [mode, setMode] = useState<Mode>(() => window.localStorage.getItem(MODE_KEY) === "advanced" ? "advanced" : "simple");
@@ -249,6 +250,11 @@ export const MooVoiceShell = () => {
         await appState.serverSetting.updateServerSettings({ ...server, gpu });
     };
 
+    const updateBeatriceVoice = (speakerId: number, pitch: number) => {
+        guiState.setBeatriceJVSSpeakerId(speakerId);
+        guiState.setBeatriceJVSSpeakerPitch(pitch);
+    };
+
     const updateTransformation = async (changes: { tran?: number; indexRatio?: number; protect?: number }) => {
         await appState.serverSetting.updateServerSettings({ ...server, ...changes });
     };
@@ -456,6 +462,34 @@ export const MooVoiceShell = () => {
                                 <input type="range" min="0" max="0.5" step="0.01" value={server.protect ?? 0.33} onChange={(event) => updateTransformation({ protect: Number(event.target.value) })} />
                                 <small>More transformation</small><small>Clearer consonants</small>
                             </label>
+                        </div>
+                    </section>
+                )}
+
+                {modelReady && isBeatriceJvs && (
+                    <section className="moo-transform" aria-label="JVS voice controls">
+                        <div className="moo-section-title">
+                            <div><h3>JVS voice selection</h3><p>Choose one of the Beatrice JVS speakers and a native pitch variant.</p></div>
+                            <span>Beatrice · JVS</span>
+                        </div>
+                        <div className="moo-transform-grid">
+                            <label className="moo-field">
+                                <span>JVS SPEAKER</span>
+                                <select value={guiState.beatriceJVSSpeakerId} onChange={(event) => updateBeatriceVoice(Number(event.target.value), guiState.beatriceJVSSpeakerPitch)}>
+                                    {Array.from({ length: 100 }).map((_, index) => <option key={index + 1} value={index + 1}>Speaker {String(index + 1).padStart(3, "0")}</option>)}
+                                </select>
+                            </label>
+                            <label className="moo-field">
+                                <span>VOICE RANGE</span>
+                                <select value={guiState.beatriceJVSSpeakerPitch} onChange={(event) => updateBeatriceVoice(guiState.beatriceJVSSpeakerId, Number(event.target.value))}>
+                                    <option value={-2}>Much lower</option>
+                                    <option value={-1}>Lower</option>
+                                    <option value={0}>Natural</option>
+                                    <option value={1}>Higher</option>
+                                    <option value={2}>Much higher</option>
+                                </select>
+                            </label>
+                            <div className="moo-import-note"><strong>500 combinations</strong><span>JVS uses its own speaker system, so RVC pitch, index, and protection controls do not apply.</span></div>
                         </div>
                     </section>
                 )}
