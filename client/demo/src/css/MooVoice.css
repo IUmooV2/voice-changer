@@ -654,3 +654,18 @@ body { margin: 0; background: var(--moo-bg); color: var(--moo-text); font-family
         min-height: 40px;
     }
 }
+
+.moo-jvs-saved button span,
+.moo-jvs-saved button small {
+    display: block;
+}
+
+.moo-jvs-saved button small {
+    margin-top: 2px;
+    color: var(--moo-muted);
+    font-size: 8px;
+}
+
+.moo-jvs-saved button.active small {
+    color: var(--moo-lilac);
+}
