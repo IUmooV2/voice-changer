@@ -12,6 +12,7 @@ type PendingProfileRestore = { slotIndex: string | number; settings: RvcPreferen
 type RvcMetadata = { displayName?: string; tags?: string; notes?: string; favorite?: boolean; artwork?: string };
 type AudioState = "idle" | "requesting" | "ready" | "error";
 type AuditionClip = { id: number; sampleNumber: number; label: string; detail: string; filename: string; createdAt: string; url: string; modelKey?: string; profile?: VoiceProfile | "custom" };
+type MooVoiceBackup = { format: "moovoice-library"; version: 1; exportedAt: string; rvcMetadata: Record<string, RvcMetadata>; rvcPreferences: Record<string, RvcPreference>; jvsFavorites: string[]; jvsAliases: Record<string, string> };
 
 const MODE_KEY = "moovoice.ui.mode";
 const INPUT_KEY = "moovoice.audio.input";
@@ -123,6 +124,7 @@ export const MooVoiceShell = () => {
     const [auditionClips, setAuditionClips] = useState<AuditionClip[]>([]);
     const [auditionLabel, setAuditionLabel] = useState<{ label: string; detail: string; modelKey?: string; profile?: VoiceProfile | "custom" }>({ label: "", detail: "" });
     const [bestAuditionId, setBestAuditionId] = useState<number | null>(null);
+    const [backupMessage, setBackupMessage] = useState("");
 
     const loadDevices = async () => {
         if (!navigator.mediaDevices?.enumerateDevices) return;
@@ -780,7 +782,47 @@ export const MooVoiceShell = () => {
         }
     };
 
-    const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const exportMooVoiceLibrary = () => {
+        const backup: MooVoiceBackup = {
+            format: "moovoice-library",
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            rvcMetadata,
+            rvcPreferences,
+            jvsFavorites,
+            jvsAliases,
+        };
+        const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        const date = new Date().toISOString().slice(0, 10);
+        link.href = url;
+        link.download = `moovoice-library-backup-${date}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+        setBackupMessage("Library backup downloaded. Keep it somewhere safe.");
+    };
+
+    const restoreMooVoiceLibrary = async (file: File | null) => {
+        if (!file) return;
+        try {
+            if (file.size > 25 * 1024 * 1024) throw new Error("This backup is larger than the 25 MB restore limit.");
+            const parsed = JSON.parse(await file.text()) as Partial<MooVoiceBackup>;
+            if (parsed.format !== "moovoice-library" || parsed.version !== 1) throw new Error("Choose a MooVoice library backup version 1 file.");
+            if (!parsed.rvcMetadata || !parsed.rvcPreferences || !Array.isArray(parsed.jvsFavorites) || !parsed.jvsAliases) throw new Error("This backup is incomplete.");
+            setRvcMetadata((current) => ({ ...current, ...parsed.rvcMetadata }));
+            setRvcPreferences((current) => ({ ...current, ...parsed.rvcPreferences }));
+            setJvsFavorites((current) => Array.from(new Set([...current, ...(parsed.jvsFavorites || [])])));
+            setJvsAliases((current) => ({ ...current, ...parsed.jvsAliases }));
+            setBackupMessage("Library restored. Names, artwork, tags, favorites, and tuning were merged.");
+        } catch (error) {
+            setBackupMessage(error instanceof Error ? error.message : "MooVoice could not restore this backup.");
+        }
+    };
+
+        const scrollTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
     return (
         <div className="moo-app">
@@ -1006,6 +1048,15 @@ export const MooVoiceShell = () => {
                 </section>
 
                 {mode === "advanced" && <section className="moo-advanced"><div><span>Chunk size</span><strong>{appState.setting.workletNodeSetting.inputChunkNum}</strong></div><div><span>Pitch detector</span><strong>{server.f0Detector}</strong></div><div><span>Feature index influence</span><strong>{server.indexRatio}</strong></div><div><span>Protect</span><strong>{server.protect}</strong></div><div><span>Compute device</span><strong>{computeLabel}</strong></div><div><span>Extra buffer</span><strong>{server.extraConvertSize}</strong></div></section>}
+
+                {mode === "advanced" && <section className="moo-library-backup" id="moo-settings">
+                    <div><span>LIBRARY SAFETY</span><h3>Back up your MooVoice library</h3><p>Save names, artwork, tags, notes, favorites, JVS aliases, and per-model tuning. Model files and recordings are not included.</p></div>
+                    <div className="moo-backup-actions">
+                        <button onClick={exportMooVoiceLibrary}>↓ Export backup</button>
+                        <label><input type="file" accept=".json,application/json" onChange={(event) => { restoreMooVoiceLibrary(event.target.files?.[0] || null); event.currentTarget.value = ""; }} />↑ Restore backup</label>
+                    </div>
+                    {backupMessage && <div className="moo-backup-message" aria-live="polite">{backupMessage}</div>}
+                </section>}
 
                 {mode === "advanced" && <section className="moo-legacy-gate"><div><strong>Engine compatibility controls</strong><span>Use the original interface for controls MooVoice has not modernized yet.</span></div><button onClick={() => setLegacyVisible((value) => !value)}>{legacyVisible ? "Hide legacy interface" : "Open legacy interface"}</button></section>}
                 {mode === "advanced" && legacyVisible && <div className="moo-legacy"><ModelSlotControl /></div>}
