@@ -988,7 +988,7 @@ body { margin: 0; background: var(--moo-bg); color: var(--moo-text); font-family
 }
 
 .moo-model-quality > span.good strong {
-    color: var(--moo-green);
+    color: var(--moo-success);
 }
 
 .moo-model-quality > span.warning strong {
