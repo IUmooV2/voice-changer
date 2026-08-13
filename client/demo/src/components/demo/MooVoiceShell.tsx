@@ -235,6 +235,20 @@ export const MooVoiceShell = () => {
         await appState.serverSetting.updateServerSettings({ ...server, gpu });
     };
 
+    const updateTransformation = async (changes: { tran?: number; indexRatio?: number; protect?: number }) => {
+        await appState.serverSetting.updateServerSettings({ ...server, ...changes });
+    };
+
+    const applyVoiceProfile = async (profile: "natural" | "full" | "bright" | "deep") => {
+        const profiles = {
+            natural: { tran: 0, indexRatio: 0.55, protect: 0.33 },
+            full: { tran: 0, indexRatio: 0.85, protect: 0.22 },
+            bright: { tran: 9, indexRatio: 0.78, protect: 0.28 },
+            deep: { tran: -5, indexRatio: 0.72, protect: 0.3 },
+        };
+        await updateTransformation(profiles[profile]);
+    };
+
     const selectModel = async (slotIndex: typeof server.modelSlotIndex) => {
         await appState.serverSetting.updateServerSettings({
             ...server,
@@ -315,12 +329,44 @@ export const MooVoiceShell = () => {
                     </article>
                 </section>
 
+                {modelReady && selectedModel?.voiceChangerType === "RVC" && (
+                    <section className="moo-transform" aria-label="Voice transformation controls">
+                        <div className="moo-section-title">
+                            <div><h3>Voice transformation</h3><p>Shape how strongly the selected model changes your voice.</p></div>
+                            <span>RVC · {selectedModel.name}</span>
+                        </div>
+                        <div className="moo-profile-row">
+                            <button onClick={() => applyVoiceProfile("natural")}><strong>Natural</strong><small>Balanced identity</small></button>
+                            <button onClick={() => applyVoiceProfile("full")}><strong>Full</strong><small>Strongest model character</small></button>
+                            <button onClick={() => applyVoiceProfile("bright")}><strong>Bright</strong><small>Higher, lighter range</small></button>
+                            <button onClick={() => applyVoiceProfile("deep")}><strong>Deep</strong><small>Lower, heavier range</small></button>
+                        </div>
+                        <div className="moo-transform-grid">
+                            <label className="moo-slider">
+                                <div><span>Pitch shift</span><strong>{server.tran > 0 ? "+" : ""}{server.tran || 0} semitones</strong></div>
+                                <input type="range" min="-12" max="12" step="1" value={server.tran || 0} onChange={(event) => updateTransformation({ tran: Number(event.target.value) })} />
+                                <small>Lower voice</small><small>Higher voice</small>
+                            </label>
+                            <label className="moo-slider">
+                                <div><span>Voice strength</span><strong>{Math.round((server.indexRatio || 0) * 100)}%</strong></div>
+                                <input type="range" min="0" max="1" step="0.05" value={server.indexRatio || 0} onChange={(event) => updateTransformation({ indexRatio: Number(event.target.value) })} />
+                                <small>Subtle</small><small>Full character</small>
+                            </label>
+                            <label className="moo-slider">
+                                <div><span>Detail protection</span><strong>{Math.round((server.protect ?? 0.33) * 100)}%</strong></div>
+                                <input type="range" min="0" max="0.5" step="0.01" value={server.protect ?? 0.33} onChange={(event) => updateTransformation({ protect: Number(event.target.value) })} />
+                                <small>More transformation</small><small>Clearer consonants</small>
+                            </label>
+                        </div>
+                    </section>
+                )}
+
                 <section className="moo-performance" id="moo-performance">
                     <div className="moo-section-title"><div><h3>Performance preset</h3><p>{presetBusy ? "Applying engine settings…" : "Choose a tuned starting point for your workload."}</p></div>{engineConnected && server.gpus?.length ? <label className="moo-gpu-select"><span>COMPUTE</span><select value={server.gpu} onChange={(event) => selectGpu(Number(event.target.value))}>{server.gpus.map((gpu) => <option key={gpu.id} value={gpu.id}>{gpu.name}</option>)}<option value={-1}>CPU</option></select></label> : <span>Connect engine to detect hardware</span>}</div>
                     <div className="moo-preset-grid">{[["low-latency","Low Latency","Fastest response for live chat","Discord · Game chat"],["balanced","Balanced","The best starting point","Everyday use"],["studio","Studio","Prioritize sound quality","Recording · Production"]].map(([id,title,copy,meta]) => <button key={id} className={preset === id ? "moo-preset active" : "moo-preset"} onClick={() => applyPreset(id as Preset)} disabled={presetBusy}><span className="moo-radio" /><strong>{title}</strong><small>{copy}</small><em>{meta}</em></button>)}</div>
                 </section>
 
-                {mode === "advanced" && <section className="moo-advanced"><div><span>Chunk size</span><strong>Automatic</strong></div><div><span>Pitch detector</span><strong>RMVPE</strong></div><div><span>Compute device</span><strong>{computeLabel}</strong></div><div><span>Buffer protection</span><strong>Enabled</strong></div></section>}
+                {mode === "advanced" && <section className="moo-advanced"><div><span>Chunk size</span><strong>{appState.setting.workletNodeSetting.inputChunkNum}</strong></div><div><span>Pitch detector</span><strong>{server.f0Detector}</strong></div><div><span>Index ratio</span><strong>{server.indexRatio}</strong></div><div><span>Protect</span><strong>{server.protect}</strong></div><div><span>Compute device</span><strong>{computeLabel}</strong></div><div><span>Extra buffer</span><strong>{server.extraConvertSize}</strong></div></section>}
 
                 <section className="moo-legacy-gate"><div><strong>Engine compatibility controls</strong><span>Use the original interface while MooVoice controls are being connected.</span></div><button onClick={() => setLegacyVisible((value) => !value)}>{legacyVisible ? "Hide legacy interface" : "Open legacy interface"}</button></section>
                 {legacyVisible && <div className="moo-legacy"><ModelSlotControl /></div>}
