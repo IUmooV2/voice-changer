@@ -9,7 +9,7 @@ type Preset = "low-latency" | "balanced" | "studio";
 type VoiceProfile = "natural" | "full" | "bright" | "deep";
 type RvcPreference = { tran: number; indexRatio: number; protect: number; profile?: VoiceProfile | "custom" };
 type PendingProfileRestore = { slotIndex: string | number; settings: RvcPreference; label: string };
-type RvcMetadata = { displayName?: string; tags?: string; notes?: string; favorite?: boolean };
+type RvcMetadata = { displayName?: string; tags?: string; notes?: string; favorite?: boolean; artwork?: string };
 type AudioState = "idle" | "requesting" | "ready" | "error";
 type AuditionClip = { id: number; sampleNumber: number; label: string; detail: string; filename: string; createdAt: string; url: string };
 
@@ -575,6 +575,32 @@ export const MooVoiceShell = () => {
         setRvcMetadata((current) => ({ ...current, [key]: { ...(current[key] || {}), ...changes } }));
     };
 
+    const chooseRvcArtwork = async (file: File | null) => {
+        if (!file || !selectedModel || selectedModel.voiceChangerType !== "RVC") return;
+        if (!file.type.startsWith("image/") || file.size > 12 * 1024 * 1024) return;
+        const sourceUrl = URL.createObjectURL(file);
+        try {
+            const image = new Image();
+            await new Promise<void>((resolve, reject) => {
+                image.onload = () => resolve();
+                image.onerror = () => reject(new Error("Artwork could not be opened."));
+                image.src = sourceUrl;
+            });
+            const canvas = document.createElement("canvas");
+            canvas.width = 256;
+            canvas.height = 256;
+            const context = canvas.getContext("2d");
+            if (!context) return;
+            const cropSize = Math.min(image.naturalWidth, image.naturalHeight);
+            const cropX = (image.naturalWidth - cropSize) / 2;
+            const cropY = (image.naturalHeight - cropSize) / 2;
+            context.drawImage(image, cropX, cropY, cropSize, cropSize, 0, 0, 256, 256);
+            updateRvcMetadata(selectedModel, { artwork: canvas.toDataURL("image/jpeg", 0.82) });
+        } finally {
+            URL.revokeObjectURL(sourceUrl);
+        }
+    };
+
     const openImporter = (replaceSlot?: number) => {
         const replacing = typeof replaceSlot === "number";
         const openSlot = modelSlots.findIndex((slot) => !slot.modelFile);
@@ -719,7 +745,7 @@ export const MooVoiceShell = () => {
                                     const displayName = metadata.displayName?.trim() || slot.name || `Voice ${slot.slotIndex}`;
                                     return <div key={String(slot.slotIndex)} className={String(slot.slotIndex) === String(server.modelSlotIndex) ? "moo-model-option active" : "moo-model-option"}>
                                         <button className="moo-model-select" disabled={Boolean(profileApplying)} onClick={() => selectModel(slot.slotIndex)}>
-                                            <span>{displayName.slice(0, 1).toUpperCase()}</span>
+                                            {metadata.artwork ? <img src={metadata.artwork} alt="" /> : <span>{displayName.slice(0, 1).toUpperCase()}</span>}
                                             <div><strong>{displayName}</strong><small>{metadata.tags?.trim() || slot.voiceChangerType}{metadata.displayName?.trim() ? ` · ${slot.name}` : ""}</small></div>
                                         </button>
                                         {slot.voiceChangerType === "RVC" && <button className={metadata.favorite ? "moo-model-favorite active" : "moo-model-favorite"} onClick={() => updateRvcMetadata(slot, { favorite: !metadata.favorite })} aria-label={metadata.favorite ? `Remove ${displayName} from favorites` : `Add ${displayName} to favorites`}>{metadata.favorite ? "★" : "☆"}</button>}
@@ -730,11 +756,22 @@ export const MooVoiceShell = () => {
                             <div className="moo-empty" onClick={() => openImporter()}><div className="moo-empty-icon">＋</div><div><strong>No model selected</strong><span>Import an RVC .pth or .onnx model</span></div></div>
                         )}
                         {mode === "advanced" && selectedModel?.voiceChangerType === "RVC" && <div className="moo-model-organizer">
-                            <div><span>MODEL DETAILS</span><strong>{selectedModelMetadata.displayName?.trim() || selectedModel.name}</strong></div>
-                            <label><span>MY NAME FOR THIS VOICE</span><input value={selectedModelMetadata.displayName || ""} onChange={(event) => updateRvcMetadata(selectedModel, { displayName: event.target.value })} placeholder={String(selectedModel.name || "Voice name")} /></label>
-                            <label><span>TAGS</span><input value={selectedModelMetadata.tags || ""} onChange={(event) => updateRvcMetadata(selectedModel, { tags: event.target.value })} placeholder="Soft, feminine, English, narrator…" /></label>
+                            <div className="moo-model-organizer-title"><span>MODEL DETAILS</span><strong>{selectedModelMetadata.displayName?.trim() || selectedModel.name}</strong></div>
+                            <div className="moo-model-artwork">
+                                {selectedModelMetadata.artwork ? <img src={selectedModelMetadata.artwork} alt={`${selectedModelMetadata.displayName?.trim() || selectedModel.name} artwork`} /> : <span>{String(selectedModelMetadata.displayName?.trim() || selectedModel.name || "V").slice(0, 1).toUpperCase()}</span>}
+                                <label><input type="file" accept="image/*" onChange={(event) => chooseRvcArtwork(event.target.files?.[0] || null)} /><strong>{selectedModelMetadata.artwork ? "Change artwork" : "Add artwork"}</strong><small>Square crop · saved locally</small></label>
+                                {selectedModelMetadata.artwork && <button onClick={() => updateRvcMetadata(selectedModel, { artwork: "" })}>Remove</button>}
+                            </div>
+                            <div className="moo-model-quality">
+                                <span><strong>{selectedModel.isONNX || /\.onnx$/i.test(selectedModel.modelFile) ? "ONNX" : "PTH"}</strong><small>Model format</small></span>
+                                <span className={selectedModel.indexFile ? "good" : "warning"}><strong>{selectedModel.indexFile ? "Index ready" : "No index"}</strong><small>{selectedModel.indexFile ? "Similarity support" : "Import one for more detail"}</small></span>
+                                <span><strong>{selectedModel.samplingRate > 0 ? `${Math.round(selectedModel.samplingRate / 1000)} kHz` : "Unknown"}</strong><small>Training rate</small></span>
+                                <span className={selectedModel.deprecated ? "warning" : "good"}><strong>{selectedModel.deprecated ? "Legacy" : "Compatible"}</strong><small>Engine status</small></span>
+                            </div>
+                            <label className="wide"><span>MY NAME FOR THIS VOICE</span><input value={selectedModelMetadata.displayName || ""} onChange={(event) => updateRvcMetadata(selectedModel, { displayName: event.target.value })} placeholder={String(selectedModel.name || "Voice name")} /></label>
+                            <label className="wide"><span>TAGS</span><input value={selectedModelMetadata.tags || ""} onChange={(event) => updateRvcMetadata(selectedModel, { tags: event.target.value })} placeholder="Soft, feminine, English, narrator…" /></label>
                             <label className="wide"><span>NOTES</span><textarea value={selectedModelMetadata.notes || ""} onChange={(event) => updateRvcMetadata(selectedModel, { notes: event.target.value })} placeholder="What this model sounds like and where it works best…" rows={2} /></label>
-                        </div>}
+                        </div>
                     </article>
 
                     <article className="moo-panel" id="moo-audio">
