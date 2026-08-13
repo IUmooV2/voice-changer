@@ -2,6 +2,7 @@ const path = require("path");
 const { merge } = require("webpack-merge");
 const common = require("./webpack_web.common.js");
 const express = require("express");
+
 module.exports = merge(common, {
     mode: "development",
     devServer: {
@@ -10,7 +11,6 @@ module.exports = merge(common, {
                 throw new Error("webpack-dev-server is not defined");
             }
 
-            // ミドルウェアを追加して静的ファイルへのアクセスログを出力
             devServer.app.use(
                 "/",
                 express.static(path.join(__dirname, "dist_web"), {
@@ -20,7 +20,6 @@ module.exports = merge(common, {
                 }),
             );
 
-            // 既存のミドルウェアをそのまま利用
             return middlewares;
         },
         client: {
@@ -31,6 +30,6 @@ module.exports = merge(common, {
             logging: "log",
         },
         host: "0.0.0.0",
-        https: true,
+        server: "https",
     },
 });
