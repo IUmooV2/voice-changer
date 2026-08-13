@@ -472,7 +472,11 @@ export const MooVoiceShell = () => {
             profile: "natural",
         };
         const restoredPreference = savedSettings || naturalDefaults;
-        const { profile: restoredProfile, ...restoredSettings } = restoredPreference;
+        const restoredSettings = {
+            tran: restoredPreference.tran,
+            indexRatio: restoredPreference.indexRatio,
+            protect: restoredPreference.protect,
+        };
         if (targetModel?.voiceChangerType === "RVC" && !savedSettings) {
             const key = rvcPreferenceKey(targetModel);
             setRvcPreferences((current) => ({ ...current, [key]: naturalDefaults }));
