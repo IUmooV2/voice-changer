@@ -13,6 +13,17 @@ const INPUT_KEY = "moovoice.audio.input";
 const OUTPUT_KEY = "moovoice.audio.output";
 const MAX_MODEL_BYTES = 2 * 1024 * 1024 * 1024;
 const MAX_INDEX_BYTES = 1024 * 1024 * 1024;
+const JVS_FAVORITES_KEY = "moovoice.jvs.favorites";
+const JVS_ALIASES_KEY = "moovoice.jvs.aliases";
+
+const readJsonSetting = <T,>(key: string, fallback: T): T => {
+    try {
+        const value = window.localStorage.getItem(key);
+        return value ? JSON.parse(value) as T : fallback;
+    } catch {
+        return fallback;
+    }
+};
 
 const formatFileSize = (bytes: number) => {
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -50,6 +61,8 @@ export const MooVoiceShell = () => {
     const [outputId, setOutputId] = useState(() => window.localStorage.getItem(OUTPUT_KEY) || "");
     const [audioState, setAudioState] = useState<AudioState>("idle");
     const [audioMessage, setAudioMessage] = useState("Select your microphone, then run an audio test.");
+    const [jvsFavorites, setJvsFavorites] = useState<number[]>(() => readJsonSetting<number[]>(JVS_FAVORITES_KEY, []));
+    const [jvsAliases, setJvsAliases] = useState<Record<string, string>>(() => readJsonSetting<Record<string, string>>(JVS_ALIASES_KEY, {}));
 
     const loadDevices = async () => {
         if (!navigator.mediaDevices?.enumerateDevices) return;
@@ -108,6 +121,14 @@ export const MooVoiceShell = () => {
     useEffect(() => {
         if (outputId) window.localStorage.setItem(OUTPUT_KEY, outputId);
     }, [outputId]);
+
+    useEffect(() => {
+        window.localStorage.setItem(JVS_FAVORITES_KEY, JSON.stringify(jvsFavorites));
+    }, [jvsFavorites]);
+
+    useEffect(() => {
+        window.localStorage.setItem(JVS_ALIASES_KEY, JSON.stringify(jvsAliases));
+    }, [jvsAliases]);
 
     useEffect(() => {
         appState.setAudioOutputElementId("moovoice-audio-output");
@@ -251,8 +272,28 @@ export const MooVoiceShell = () => {
     };
 
     const updateBeatriceVoice = (speakerId: number, pitch: number) => {
-        guiState.setBeatriceJVSSpeakerId(speakerId);
+        guiState.setBeatriceJVSSpeakerId(Math.min(100, Math.max(1, speakerId)));
         guiState.setBeatriceJVSSpeakerPitch(pitch);
+    };
+
+    const stepBeatriceVoice = (direction: -1 | 1) => {
+        const next = ((guiState.beatriceJVSSpeakerId - 1 + direction + 100) % 100) + 1;
+        updateBeatriceVoice(next, guiState.beatriceJVSSpeakerPitch);
+    };
+
+    const toggleJvsFavorite = () => {
+        const id = guiState.beatriceJVSSpeakerId;
+        setJvsFavorites((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id].sort((a, b) => a - b));
+    };
+
+    const updateJvsAlias = (value: string) => {
+        const key = String(guiState.beatriceJVSSpeakerId);
+        setJvsAliases((current) => {
+            const next = { ...current };
+            if (value.trim()) next[key] = value;
+            else delete next[key];
+            return next;
+        });
     };
 
     const updateTransformation = async (changes: { tran?: number; indexRatio?: number; protect?: number }) => {
@@ -469,14 +510,29 @@ export const MooVoiceShell = () => {
                 {modelReady && isBeatriceJvs && (
                     <section className="moo-transform" aria-label="JVS voice controls">
                         <div className="moo-section-title">
-                            <div><h3>JVS voice selection</h3><p>Choose one of the Beatrice JVS speakers and a native pitch variant.</p></div>
+                            <div><h3>JVS voice browser</h3><p>Explore Japanese-trained Beatrice voices and save the ones that work for you.</p></div>
                             <span>Beatrice · JVS</span>
+                        </div>
+                        <div className="moo-jvs-browser">
+                            <button onClick={() => stepBeatriceVoice(-1)} aria-label="Previous JVS speaker">‹</button>
+                            <div className="moo-jvs-current">
+                                <small>JVS SPEAKER</small>
+                                <strong>{jvsAliases[String(guiState.beatriceJVSSpeakerId)] || `JVS ${String(guiState.beatriceJVSSpeakerId).padStart(3, "0")}`}</strong>
+                                <span>Official ID: jvs{String(guiState.beatriceJVSSpeakerId).padStart(3, "0")}</span>
+                            </div>
+                            <button onClick={() => stepBeatriceVoice(1)} aria-label="Next JVS speaker">›</button>
+                            <button className={jvsFavorites.includes(guiState.beatriceJVSSpeakerId) ? "moo-jvs-favorite active" : "moo-jvs-favorite"} onClick={toggleJvsFavorite} aria-label="Favorite this voice">{jvsFavorites.includes(guiState.beatriceJVSSpeakerId) ? "★ Saved" : "☆ Save"}</button>
                         </div>
                         <div className="moo-transform-grid">
                             <label className="moo-field">
                                 <span>JVS SPEAKER</span>
                                 <select value={guiState.beatriceJVSSpeakerId} onChange={(event) => updateBeatriceVoice(Number(event.target.value), guiState.beatriceJVSSpeakerPitch)}>
-                                    {Array.from({ length: 100 }).map((_, index) => <option key={index + 1} value={index + 1}>Speaker {String(index + 1).padStart(3, "0")}</option>)}
+                                    {Array.from({ length: 100 }).map((_, index) => {
+                                        const id = index + 1;
+                                        const alias = jvsAliases[String(id)];
+                                        const favorite = jvsFavorites.includes(id) ? "★ " : "";
+                                        return <option key={id} value={id}>{favorite}{alias || `JVS ${String(id).padStart(3, "0")}`}</option>;
+                                    })}
                                 </select>
                             </label>
                             <label className="moo-field">
@@ -489,8 +545,13 @@ export const MooVoiceShell = () => {
                                     <option value={2}>Much higher</option>
                                 </select>
                             </label>
-                            <div className="moo-import-note"><strong>500 combinations</strong><span>JVS uses its own speaker system, so RVC pitch, index, and protection controls do not apply.</span></div>
+                            <label className="moo-field">
+                                <span>MY NAME FOR THIS VOICE</span>
+                                <input value={jvsAliases[String(guiState.beatriceJVSSpeakerId)] || ""} onChange={(event) => updateJvsAlias(event.target.value)} placeholder="Example: Soft, Bright, Narrator…" />
+                            </label>
                         </div>
+                        {jvsFavorites.length > 0 && <div className="moo-jvs-saved"><strong>Saved voices</strong>{jvsFavorites.map((id) => <button key={id} className={id === guiState.beatriceJVSSpeakerId ? "active" : ""} onClick={() => updateBeatriceVoice(id, guiState.beatriceJVSSpeakerPitch)}>{jvsAliases[String(id)] || `JVS ${String(id).padStart(3, "0")}`}</button>)}</div>}
+                        <div className="moo-import-note"><strong>Japanese-trained</strong><span>English may inherit Japanese pronunciation and rhythm. These voices are best treated as experimental styles, not natural English models.</span></div>
                     </section>
                 )}
 
