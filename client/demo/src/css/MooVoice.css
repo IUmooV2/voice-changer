@@ -102,3 +102,9 @@ body { margin: 0; background: var(--moo-bg); color: var(--moo-text); font-family
 .moo-audio-message.requesting { color: var(--moo-lilac-bright); }
 .moo-audio-message.ready { color: var(--moo-success); }
 .moo-audio-message.error { color: #ef8e98; }
+
+.moo-system-pill.offline { color: #d8a4aa; }
+.moo-system-pill.offline i { background: #d87680; box-shadow: 0 0 9px #d87680; }
+.moo-system-pill.connected { color: var(--moo-success); }
+.moo-empty.model-ready { border-style: solid; border-color: rgba(118,214,176,.28); background: rgba(118,214,176,.045); }
+.moo-empty.model-ready .moo-empty-icon { color: var(--moo-success); background: rgba(118,214,176,.1); }
