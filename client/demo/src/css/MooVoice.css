@@ -1271,3 +1271,135 @@ body { margin: 0; background: var(--moo-bg); color: var(--moo-text); font-family
         justify-self: start;
     }
 }
+
+
+.moo-model-readiness {
+    display: grid;
+    gap: 12px;
+    margin: 4px 0 8px;
+    padding: 16px;
+    border: 1px solid rgba(190, 152, 255, 0.22);
+    border-radius: 14px;
+    background: rgba(156, 103, 255, 0.055);
+}
+
+.moo-readiness-summary {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 12px;
+    align-items: center;
+}
+
+.moo-readiness-score {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    min-width: 72px;
+    padding: 9px 10px;
+    border-radius: 12px;
+    color: var(--moo-lilac);
+    background: rgba(156, 103, 255, 0.14);
+}
+
+.moo-readiness-score strong {
+    font-size: 24px;
+    line-height: 1;
+}
+
+.moo-readiness-score span {
+    margin-left: 3px;
+    color: var(--moo-muted);
+    font-size: 10px;
+}
+
+.moo-readiness-summary > div:nth-child(2) {
+    display: grid;
+    gap: 3px;
+}
+
+.moo-readiness-summary small {
+    color: var(--moo-muted);
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+}
+
+.moo-readiness-summary > div:nth-child(2) strong {
+    color: var(--moo-text);
+    font-size: 15px;
+}
+
+.moo-readiness-summary > div:nth-child(2) span,
+.moo-model-readiness li,
+.moo-readiness-action span {
+    color: var(--moo-muted);
+    font-size: 11px;
+    line-height: 1.45;
+}
+
+.moo-readiness-summary button {
+    padding: 10px 13px;
+    border: 1px solid rgba(190, 152, 255, 0.45);
+    border-radius: 10px;
+    color: #17121f;
+    background: var(--moo-lilac);
+    font-size: 11px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.moo-readiness-summary button:disabled {
+    cursor: wait;
+    opacity: 0.58;
+}
+
+.moo-readiness-meter {
+    height: 6px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.moo-readiness-meter i {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #8e65d8, #c6a5ff, #73dbb3);
+    transition: width 240ms ease;
+}
+
+.moo-model-readiness ul {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding-left: 18px;
+}
+
+.moo-readiness-action {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(237, 184, 92, 0.08);
+}
+
+.moo-readiness-action strong {
+    color: #e7bd72;
+    font-size: 10px;
+    white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+    .moo-readiness-summary {
+        grid-template-columns: auto 1fr;
+    }
+
+    .moo-readiness-summary button {
+        grid-column: 1 / -1;
+    }
+
+    .moo-readiness-action {
+        grid-template-columns: 1fr;
+    }
+}
