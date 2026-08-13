@@ -489,7 +489,7 @@ export const MooVoiceShell = () => {
                                 ))}
                             </div> : <div className="moo-library-empty">No voice models match “{modelQuery}”.</div>
                         ) : (
-                            <div className="moo-empty" onClick={openImporter}><div className="moo-empty-icon">＋</div><div><strong>No model selected</strong><span>Import an RVC .pth or .onnx model</span></div></div>
+                            <div className="moo-empty" onClick={() => openImporter()}><div className="moo-empty-icon">＋</div><div><strong>No model selected</strong><span>Import an RVC .pth or .onnx model</span></div></div>
                         )}
                     </article>
 
