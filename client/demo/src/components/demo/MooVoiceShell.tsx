@@ -189,10 +189,10 @@ export const MooVoiceShell = () => {
         await appState.serverSetting.updateServerSettings({ ...server, gpu });
     };
 
-    const selectModel = async (slotIndex: number | string) => {
+    const selectModel = async (slotIndex: typeof server.modelSlotIndex) => {
         await appState.serverSetting.updateServerSettings({
             ...server,
-            modelSlotIndex: typeof slotIndex === "number" ? slotIndex : Number(slotIndex),
+            modelSlotIndex: slotIndex,
         });
     };
 
