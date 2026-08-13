@@ -67,8 +67,8 @@ function Resolve-EngineDirectory([string]$RequestedDirectory) {
 
 function Start-Engine([string]$Directory) {
     $choices = @(
-        @{ Name = "start_http.bat"; Args = "" },
         @{ Name = "start_https.bat"; Args = "" },
+        @{ Name = "start_http.bat"; Args = "" },
         @{ Name = "start.bat"; Args = "" },
         @{ Name = "MMVCServerSIO.exe"; Args = "-p $EnginePort --https true" }
     )
@@ -78,7 +78,7 @@ function Start-Engine([string]$Directory) {
         if (-not (Test-Path $path -PathType Leaf)) { continue }
         Write-Step "Starting conversion engine with $($choice.Name)..."
         if ($path.EndsWith(".bat")) {
-            Start-Process -FilePath "cmd.exe" -ArgumentList "/k", ('"' + $path + '"') -WorkingDirectory $Directory | Out-Null
+            Start-Process -FilePath "cmd.exe" -ArgumentList "/k", ('"' + $path + '"') -WorkingDirectory $Directory -WindowStyle Minimized | Out-Null
         } else {
             Start-Process -FilePath $path -ArgumentList $choice.Args -WorkingDirectory $Directory | Out-Null
         }
@@ -120,10 +120,11 @@ if (-not $SkipInterface) {
         Write-Host "[MooVoice] Interface is already running." -ForegroundColor Green
     } else {
         Write-Step "Starting the MooVoice interface..."
-        $env:MOOVOICE_ENGINE_URL = "http://127.0.0.1:$EnginePort"
+        $engineProtocol = if ((Test-Path (Join-Path $resolvedEngineDirectory "start_https.bat")) -or (-not $resolvedEngineDirectory)) { "https" } else { "http" }
+        $env:MOOVOICE_ENGINE_URL = "${engineProtocol}://127.0.0.1:$EnginePort"
         $escapedDemoDirectory = $DemoDirectory.Replace("'", "''")
         $command = "Set-Location -LiteralPath '$escapedDemoDirectory'; npm start"
-        Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $command -WorkingDirectory $DemoDirectory | Out-Null
+        Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $command -WorkingDirectory $DemoDirectory -WindowStyle Minimized | Out-Null
         Wait-ForPort "MooVoice interface" $InterfacePort 120
     }
 }
