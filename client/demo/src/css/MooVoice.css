@@ -1185,7 +1185,7 @@ body { margin: 0; background: var(--moo-bg); color: var(--moo-text); font-family
 
 .moo-audition-clips article {
     display: grid;
-    grid-template-columns: minmax(150px, 0.55fr) minmax(220px, 1fr) auto auto;
+    grid-template-columns: minmax(150px, 0.55fr) minmax(220px, 1fr) auto auto auto;
     align-items: center;
     gap: 12px;
     padding: 11px 12px;
@@ -1464,5 +1464,29 @@ body { margin: 0; background: var(--moo-bg); color: var(--moo-text); font-family
     .moo-setup-status {
         align-items: flex-start;
         flex-direction: column;
+    }
+}
+
+
+.moo-audition-clips article > button.moo-audition-best {
+    width: auto;
+    min-width: 62px;
+    padding: 0 10px;
+    color: var(--moo-lilac);
+    font-size: 9px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.moo-audition-clips article > button.moo-audition-best.active {
+    border-color: rgba(190, 152, 255, 0.58);
+    color: #17121f;
+    background: var(--moo-lilac);
+}
+
+@media (max-width: 720px) {
+    .moo-audition-clips article > button.moo-audition-best {
+        grid-column: 1;
+        justify-self: start;
     }
 }
