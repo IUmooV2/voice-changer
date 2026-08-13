@@ -203,10 +203,19 @@ export const useClient = (props: UseClientProps): ClientState => {
             return;
         }
         const audio = document.getElementById(elemId) as HTMLAudioElement;
-        if (audio.paused) {
-            audio.srcObject = voiceChangerClientRef.current.stream;
-            audio.play();
+        if (!audio) {
+            console.warn(`[voiceChangerClient] audio output element "${elemId}" was not found.`);
+            return;
         }
+
+        // Rebuild the media-element route every time. Calling setSinkId on an
+        // already-playing MediaStream can leave Chromium sending the stream to
+        // its previous/default device, especially with virtual audio cables.
+        // Keeping the element paused here lets the UI select the sink before
+        // playback resumes.
+        audio.pause();
+        audio.srcObject = null;
+        audio.srcObject = voiceChangerClientRef.current.stream;
     };
 
     const setAudioMonitorElementId = (elemId: string) => {
