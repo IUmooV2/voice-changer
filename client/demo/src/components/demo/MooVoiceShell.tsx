@@ -188,7 +188,11 @@ export const MooVoiceShell = () => {
         if (!pendingProfileRestore || String(server.modelSlotIndex) !== String(pendingProfileRestore.slotIndex)) return;
         let active = true;
         const restoreProfile = async () => {
-            const { profile, ...settings } = pendingProfileRestore.settings;
+            const settings = {
+                tran: pendingProfileRestore.settings.tran,
+                indexRatio: pendingProfileRestore.settings.indexRatio,
+                protect: pendingProfileRestore.settings.protect,
+            };
             try {
                 // This effect runs after the model-change response has produced a fresh
                 // server snapshot, so updateServerSettings will not resend modelSlotIndex.
@@ -515,11 +519,6 @@ export const MooVoiceShell = () => {
             profile: "natural",
         };
         const restoredPreference = savedSettings || naturalDefaults;
-        const restoredSettings = {
-            tran: restoredPreference.tran,
-            indexRatio: restoredPreference.indexRatio,
-            protect: restoredPreference.protect,
-        };
         if (targetModel?.voiceChangerType === "RVC" && !savedSettings) {
             const key = rvcPreferenceKey(targetModel);
             setRvcPreferences((current) => ({ ...current, [key]: naturalDefaults }));
