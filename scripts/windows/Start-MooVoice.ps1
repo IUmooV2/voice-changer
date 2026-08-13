@@ -145,10 +145,9 @@ if (-not $SkipInterface) {
         $engineProtocol = if (-not $resolvedEngineDirectory) { "https" } elseif (Test-Path (Join-Path $resolvedEngineDirectory "start_https.bat")) { "https" } else { "http" }
         $env:MOOVOICE_ENGINE_URL = "${engineProtocol}://127.0.0.1:$EnginePort"
         $escapedDemoDirectory = $DemoDirectory.Replace("'", "''")
-        $escapedLogDirectory = $LogDirectory.Replace("'", "''")
-        $command = "`$host.UI.RawUI.WindowTitle='MooVoice Interface'; Set-Location -LiteralPath '$escapedDemoDirectory'; npm start 2>&1 | Tee-Object -FilePath (Join-Path '$escapedLogDirectory' 'interface.log')"
+        $command = "title MooVoice Interface && npm start"
         $windowStyle = if ($ShowServiceWindows) { "Normal" } else { "Minimized" }
-        $interfaceProcess = Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $command -WorkingDirectory $DemoDirectory -WindowStyle $windowStyle -PassThru
+        $interfaceProcess = Start-Process -FilePath "cmd.exe" -ArgumentList "/k", $command -WorkingDirectory $DemoDirectory -WindowStyle $windowStyle -PassThru
         Wait-ForPort "MooVoice interface" $InterfacePort 120 $interfaceProcess
     }
 }
@@ -162,5 +161,5 @@ Write-Host ""
 Write-Host "MooVoice is ready." -ForegroundColor Green
 Write-Host "Interface: https://localhost:$InterfacePort"
 Write-Host "Engine port: $EnginePort"
-Write-Host "Logs: $LogDirectory"
+Write-Host "Startup log: $StartupLog"
 Write-Host "Tip: add -ShowServiceWindows when troubleshooting." -ForegroundColor DarkGray
