@@ -85,6 +85,7 @@ export const MooVoiceShell = () => {
     const [mode, setMode] = useState<Mode>(() => window.localStorage.getItem(MODE_KEY) === "advanced" ? "advanced" : "simple");
     const [preset, setPreset] = useState<Preset>("balanced");
     const [presetBusy, setPresetBusy] = useState(false);
+    const [profileApplying, setProfileApplying] = useState("");
     const [rvcPreferences, setRvcPreferences] = useState<Record<string, RvcPreference>>(
         () => readJsonSetting<Record<string, RvcPreference>>(RVC_PREFERENCES_KEY, {})
     );
@@ -498,20 +499,44 @@ export const MooVoiceShell = () => {
             setRvcPreferences((current) => ({ ...current, [key]: naturalDefaults }));
         }
 
-        // Model activation can reset conversion parameters, so restore tuning only after
-        // the engine has completed the slot change.
-        await appState.serverSetting.updateServerSettings({
-            ...server,
-            modelSlotIndex: slotIndex,
-        });
-        if (targetModel?.voiceChangerType === "RVC") {
-            await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+        // Wait for the server to confirm the slot change before restoring its tuning.
+        // A fixed delay can race slower model activation and silently lose the profile.
+        setProfileApplying(targetModel?.voiceChangerType === "RVC"
+            ? `Applying ${VOICE_PROFILES[restoredPreference.profile as VoiceProfile]?.label || "custom tuning"}…`
+            : "Switching voice…");
+        try {
             await appState.serverSetting.updateServerSettings({
                 ...server,
                 modelSlotIndex: slotIndex,
-                ...restoredSettings,
             });
-            await appState.trancateBuffer();
+            if (targetModel?.voiceChangerType === "RVC") {
+                for (let attempt = 0; attempt < 15; attempt += 1) {
+                    await new Promise<void>((resolve) => window.setTimeout(resolve, 200));
+                    try {
+                        const response = await fetch("/info", { cache: "no-store" });
+                        const info = await response.json();
+                        const activeSlot = info?.voiceChangerParams?.modelSlotIndex ?? info?.modelSlotIndex;
+                        if (String(activeSlot) === String(slotIndex)) break;
+                    } catch {
+                        // The next poll will retry while the engine completes activation.
+                    }
+                }
+                await appState.serverSetting.updateServerSettings({
+                    ...server,
+                    modelSlotIndex: slotIndex,
+                    ...restoredSettings,
+                });
+                await new Promise<void>((resolve) => window.setTimeout(resolve, 350));
+                await appState.serverSetting.updateServerSettings({
+                    ...server,
+                    modelSlotIndex: slotIndex,
+                    ...restoredSettings,
+                });
+                await appState.serverSetting.reloadServerInfo();
+                await appState.trancateBuffer();
+            }
+        } finally {
+            setProfileApplying("");
         }
     };
 
@@ -696,7 +721,7 @@ export const MooVoiceShell = () => {
                             {(Object.keys(VOICE_PROFILES) as VoiceProfile[]).map((profile) => {
                                 const settings = VOICE_PROFILES[profile];
                                 const active = activeVoiceProfile === profile;
-                                return <button key={profile} className={active ? "active" : ""} aria-pressed={active} onClick={() => applyVoiceProfile(profile)}>
+                                return <button key={profile} className={active ? "active" : ""} aria-pressed={active} disabled={Boolean(profileApplying)} onClick={() => applyVoiceProfile(profile)}>
                                     <span className="moo-profile-check">{active ? "✓ Selected" : "Select"}</span>
                                     <strong>{settings.label}</strong>
                                     <small>{settings.description}</small>
@@ -704,7 +729,7 @@ export const MooVoiceShell = () => {
                             })}
                         </div>
                         <div className={activeVoiceProfile ? "moo-profile-selection active" : "moo-profile-selection"}>
-                            <div><span>{activeVoiceProfile ? "ACTIVE PROFILE" : "CUSTOM SETTINGS"}</span><strong>{activeProfileSettings?.label || "Custom tuning"}</strong></div>
+                            <div><span>{profileApplying ? "SYNCING ENGINE" : activeVoiceProfile ? "ACTIVE PROFILE" : "CUSTOM SETTINGS"}</span><strong>{profileApplying || activeProfileSettings?.label || "Custom tuning"}</strong></div>
                             <small>Pitch {displayedTransformation.tran > 0 ? "+" : ""}{displayedTransformation.tran} · Similarity {Math.round(displayedTransformation.indexRatio * 100)}% · Detail {Math.round(displayedTransformation.protect * 100)}% · Remembered for this model</small>
                         </div>
                         {mode === "advanced" && <div className="moo-transform-grid">
