@@ -6,6 +6,7 @@ import { useGuiState } from "./001_GuiStateProvider";
 
 type Mode = "simple" | "advanced";
 type Preset = "low-latency" | "balanced" | "studio";
+type VoiceProfile = "natural" | "full" | "bright" | "deep";
 type AudioState = "idle" | "requesting" | "ready" | "error";
 type AuditionClip = { id: number; sampleNumber: number; label: string; detail: string; filename: string; createdAt: string; url: string };
 
@@ -17,6 +18,12 @@ const MAX_INDEX_BYTES = 1024 * 1024 * 1024;
 const JVS_FAVORITES_KEY = "moovoice.jvs.favorites";
 const JVS_ALIASES_KEY = "moovoice.jvs.aliases";
 const JVS_RANGE_LABELS: Record<number, string> = { [-2]: "Much lower", [-1]: "Lower", 0: "Natural", 1: "Higher", 2: "Much higher" };
+const VOICE_PROFILES: Record<VoiceProfile, { tran: number; indexRatio: number; protect: number; label: string; description: string }> = {
+    natural: { tran: 0, indexRatio: 0.55, protect: 0.33, label: "Natural", description: "Balanced identity" },
+    full: { tran: 0, indexRatio: 0.85, protect: 0.22, label: "Full", description: "Strongest model character" },
+    bright: { tran: 9, indexRatio: 0.78, protect: 0.28, label: "Bright", description: "Higher, lighter range" },
+    deep: { tran: -5, indexRatio: 0.72, protect: 0.3, label: "Deep", description: "Lower, heavier range" },
+};
 const jvsFavoriteKey = (speakerId: number, pitch: number) => `${speakerId}:${pitch}`;
 
 const readJsonSetting = <T,>(key: string, fallback: T): T => {
@@ -411,15 +418,18 @@ export const MooVoiceShell = () => {
         await appState.serverSetting.updateServerSettings({ ...server, ...changes });
     };
 
-    const applyVoiceProfile = async (profile: "natural" | "full" | "bright" | "deep") => {
-        const profiles = {
-            natural: { tran: 0, indexRatio: 0.55, protect: 0.33 },
-            full: { tran: 0, indexRatio: 0.85, protect: 0.22 },
-            bright: { tran: 9, indexRatio: 0.78, protect: 0.28 },
-            deep: { tran: -5, indexRatio: 0.72, protect: 0.3 },
-        };
-        await updateTransformation(profiles[profile]);
+    const applyVoiceProfile = async (profile: VoiceProfile) => {
+        const { tran, indexRatio, protect } = VOICE_PROFILES[profile];
+        await updateTransformation({ tran, indexRatio, protect });
     };
+
+    const activeVoiceProfile = (Object.keys(VOICE_PROFILES) as VoiceProfile[]).find((profile) => {
+        const settings = VOICE_PROFILES[profile];
+        return Number(server.tran || 0) === settings.tran
+            && Math.abs(Number(server.indexRatio || 0) - settings.indexRatio) < 0.001
+            && Math.abs(Number(server.protect ?? 0.33) - settings.protect) < 0.001;
+    });
+    const activeProfileSettings = activeVoiceProfile ? VOICE_PROFILES[activeVoiceProfile] : null;
 
     const selectModel = async (slotIndex: typeof server.modelSlotIndex) => {
         await appState.serverSetting.updateServerSettings({
@@ -606,10 +616,19 @@ export const MooVoiceShell = () => {
                             <span>RVC · {selectedModel.name}</span>
                         </div>
                         <div className="moo-profile-row">
-                            <button onClick={() => applyVoiceProfile("natural")}><strong>Natural</strong><small>Balanced identity</small></button>
-                            <button onClick={() => applyVoiceProfile("full")}><strong>Full</strong><small>Strongest model character</small></button>
-                            <button onClick={() => applyVoiceProfile("bright")}><strong>Bright</strong><small>Higher, lighter range</small></button>
-                            <button onClick={() => applyVoiceProfile("deep")}><strong>Deep</strong><small>Lower, heavier range</small></button>
+                            {(Object.keys(VOICE_PROFILES) as VoiceProfile[]).map((profile) => {
+                                const settings = VOICE_PROFILES[profile];
+                                const active = activeVoiceProfile === profile;
+                                return <button key={profile} className={active ? "active" : ""} aria-pressed={active} onClick={() => applyVoiceProfile(profile)}>
+                                    <span className="moo-profile-check">{active ? "✓ Selected" : "Select"}</span>
+                                    <strong>{settings.label}</strong>
+                                    <small>{settings.description}</small>
+                                </button>;
+                            })}
+                        </div>
+                        <div className={activeVoiceProfile ? "moo-profile-selection active" : "moo-profile-selection"}>
+                            <div><span>{activeVoiceProfile ? "ACTIVE PROFILE" : "CUSTOM SETTINGS"}</span><strong>{activeProfileSettings?.label || "Custom tuning"}</strong></div>
+                            <small>Pitch {Number(server.tran || 0) > 0 ? "+" : ""}{Number(server.tran || 0)} · Similarity {Math.round(Number(server.indexRatio || 0) * 100)}% · Detail {Math.round(Number(server.protect ?? 0.33) * 100)}%</small>
                         </div>
                         {mode === "advanced" && <div className="moo-transform-grid">
                             <label className="moo-slider">
